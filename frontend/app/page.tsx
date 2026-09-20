@@ -7,20 +7,41 @@ import {
   restoreWallet,
   changeWallet,
   getWalletProvider,
-  ensureTestnetNetwork,
+  ensureBradburyNetwork,
   getWork,
   sendWrite,
-  TESTNET_CHAIN_ID,
+  BRADBURY_CHAIN_ID,
+  BRADBURY_CHAIN_ID_DECIMAL,
+  BRADBURY_EXPLORER,
+  CONTRACT_ADDRESS,
   type ProofWorkResult,
 } from "@/lib/genlayer";
 
-function shortAddress(address: string) {
+function shortAddress(
+  address: string,
+) {
   if (!address) return "";
 
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+  return `${address.slice(
+    0,
+    6,
+  )}…${address.slice(-4)}`;
 }
 
-function errorMessage(error: unknown) {
+function shortHash(
+  hash: string,
+) {
+  if (!hash) return "";
+
+  return `${hash.slice(
+    0,
+    10,
+  )}…${hash.slice(-8)}`;
+}
+
+function errorMessage(
+  error: unknown,
+) {
   if (error instanceof Error) {
     return error.message;
   }
@@ -29,13 +50,15 @@ function errorMessage(error: unknown) {
 }
 
 export default function Home() {
-  const [wallet, setWallet] = useState("");
+  const [wallet, setWallet] =
+    useState("");
 
-  const [client, setClient] = useState<
-    Awaited<
-      ReturnType<typeof connectWallet>
-    >["client"] | null
-  >(null);
+  const [client, setClient] =
+    useState<
+      Awaited<
+        ReturnType<typeof connectWallet>
+      >["client"] | null
+    >(null);
 
   const [networkReady, setNetworkReady] =
     useState(false);
@@ -44,7 +67,9 @@ export default function Home() {
     useState("demo-001");
 
   const [title, setTitle] =
-    useState("Landing page delivery");
+    useState(
+      "Landing page delivery",
+    );
 
   const [criteria, setCriteria] =
     useState(
@@ -52,7 +77,9 @@ export default function Home() {
     );
 
   const [evidence, setEvidence] =
-    useState("https://example.com");
+    useState(
+      "https://example.com",
+    );
 
   const [status, setStatus] =
     useState(
@@ -60,7 +87,9 @@ export default function Home() {
     );
 
   const [result, setResult] =
-    useState<ProofWorkResult | null>(null);
+    useState<ProofWorkResult | null>(
+      null,
+    );
 
   const [busy, setBusy] =
     useState(false);
@@ -74,9 +103,10 @@ export default function Home() {
     }
 
     try {
-      const work = await getWork(
-        workId.trim(),
-      );
+      const work =
+        await getWork(
+          workId.trim(),
+        );
 
       setResult(work);
     } catch {
@@ -84,15 +114,12 @@ export default function Home() {
     }
   }
 
-  /**
-   * Connect wallet.
-   */
   async function connect() {
     try {
       setBusy(true);
 
       setStatus(
-        "Checking wallet and GenLayer Testnet Asimov network…",
+        "Checking wallet and GenLayer Testnet Bradbury network…",
       );
 
       const connected =
@@ -124,9 +151,6 @@ export default function Home() {
     }
   }
 
-  /**
-   * Change wallet account.
-   */
   async function handleChangeWallet() {
     try {
       setBusy(true);
@@ -162,13 +186,6 @@ export default function Home() {
     }
   }
 
-  /**
-   * Disconnect only the ProofWork
-   * frontend session.
-   *
-   * EIP-1193 does not provide a universal
-   * dapp-side disconnect method.
-   */
   function disconnect() {
     setWallet("");
 
@@ -216,10 +233,7 @@ export default function Home() {
           );
         }
       } catch {
-        /*
-         * Wallet is optional until
-         * manually connected.
-         */
+        // Wallet is optional until manually connected.
       }
     }
 
@@ -271,23 +285,23 @@ export default function Home() {
           args[0] ?? "",
         ).toLowerCase();
 
-      const isTestnet =
+      const isBradbury =
         chainId ===
-        TESTNET_CHAIN_ID.toLowerCase();
+        BRADBURY_CHAIN_ID.toLowerCase();
 
       setClient(null);
 
       setNetworkReady(
-        isTestnet,
+        isBradbury,
       );
 
-      if (isTestnet) {
+      if (isBradbury) {
         setStatus(
-          "GenLayer Testnet Asimov selected. Click Connect wallet to continue.",
+          `GenLayer Testnet Bradbury selected. Chain ID ${BRADBURY_CHAIN_ID_DECIMAL}. Click Connect wallet to continue.`,
         );
       } else {
         setStatus(
-          "Wrong network. Click Switch network to use GenLayer Testnet Asimov.",
+          "Wrong network. Click Switch network to use GenLayer Testnet Bradbury.",
         );
       }
     };
@@ -318,9 +332,12 @@ export default function Home() {
   }, []);
 
   async function create() {
-    if (!client || !networkReady) {
+    if (
+      !client ||
+      !networkReady
+    ) {
       return setStatus(
-        "Connect your wallet to GenLayer Testnet Asimov first.",
+        "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
     }
 
@@ -373,9 +390,12 @@ export default function Home() {
   }
 
   async function submit() {
-    if (!client || !networkReady) {
+    if (
+      !client ||
+      !networkReady
+    ) {
       return setStatus(
-        "Connect your wallet to GenLayer Testnet Asimov first.",
+        "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
     }
 
@@ -427,9 +447,12 @@ export default function Home() {
   }
 
   async function verify() {
-    if (!client || !networkReady) {
+    if (
+      !client ||
+      !networkReady
+    ) {
       return setStatus(
-        "Connect your wallet to GenLayer Testnet Asimov first.",
+        "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
     }
 
@@ -471,12 +494,12 @@ export default function Home() {
     try {
       setBusy(true);
 
-      await ensureTestnetNetwork();
+      await ensureBradburyNetwork();
 
       setNetworkReady(true);
 
       setStatus(
-        "GenLayer Testnet Asimov selected. Click Connect wallet to authorize the account.",
+        "GenLayer Testnet Bradbury selected. Click Connect wallet to authorize the account.",
       );
     } catch (error) {
       setStatus(
@@ -494,6 +517,13 @@ export default function Home() {
         networkReady,
     );
 
+  const contractDisplay =
+    CONTRACT_ADDRESS
+      ? shortAddress(
+          CONTRACT_ADDRESS,
+        )
+      : "Not deployed";
+
   return (
     <main>
       <nav>
@@ -510,14 +540,16 @@ export default function Home() {
 
         <div className="row">
           <span className="badge">
-            Testnet Asimov · 4221
+            Bradbury · {BRADBURY_CHAIN_ID_DECIMAL}
           </span>
 
           {connected ? (
             <>
               <span className="badge">
                 ● Connected ·{" "}
-                {shortAddress(wallet)}
+                {shortAddress(
+                  wallet,
+                )}
               </span>
 
               <button
@@ -754,11 +786,15 @@ export default function Home() {
               Transaction
             </span>
 
-            <code>
-              {shortAddress(
-                txHash,
-              )}
-            </code>
+            <a
+              href={`${BRADBURY_EXPLORER}/tx/${txHash}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <code>
+                {shortHash(txHash)}
+              </code>
+            </a>
           </div>
         )}
 
@@ -814,9 +850,10 @@ export default function Home() {
       <footer>
         Contract:{" "}
         <code>
-          {CONTRACT_ADDRESS_DISPLAY}
+          {contractDisplay}
         </code>{" "}
-        · GenLayer Testnet Asimov
+        · GenLayer Testnet Bradbury ·
+        Chain {BRADBURY_CHAIN_ID_DECIMAL}
       </footer>
     </main>
   );
