@@ -1,11 +1,24 @@
-import { createClient } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
-import { TransactionStatus } from "genlayer-js/types";
+import {
+  createClient,
+} from "genlayer-js";
+
+import {
+  testnetBradbury,
+} from "genlayer-js/chains";
+
+import {
+  TransactionStatus,
+} from "genlayer-js/types";
+
+import {
+  encodeFunctionData,
+  decodeFunctionResult,
+} from "viem";
 
 /**
- * ProofWork contract
+ * ProofWork Intelligent Contract
  *
- * No environment variables are used.
+ * Hard-coded intentionally.
  */
 export const CONTRACT_ADDRESS =
   "0x4F0b22649e8503886761E87Aafe86869b4E444c5" as `0x${string}`;
@@ -13,8 +26,11 @@ export const CONTRACT_ADDRESS =
 /**
  * GenLayer Testnet Bradbury
  */
-export const BRADBURY_CHAIN_ID = "0x107D";
-export const BRADBURY_CHAIN_ID_DECIMAL = 4221;
+export const BRADBURY_CHAIN_ID =
+  "0x107D";
+
+export const BRADBURY_CHAIN_ID_DECIMAL =
+  4221;
 
 export const BRADBURY_RPC =
   "https://rpc-bradbury.genlayer.com";
@@ -22,18 +38,159 @@ export const BRADBURY_RPC =
 export const BRADBURY_EXPLORER =
   "https://explorer-bradbury.genlayer.com";
 
+/**
+ * Bradbury Fee Manager.
+ *
+ * This address comes from the current
+ * GenLayerJS Bradbury chain definition.
+ */
+const FEE_MANAGER_ADDRESS =
+  testnetBradbury.feeManagerContract
+    ?.address as `0x${string}`;
+
+/**
+ * Fee Manager ABI.
+ *
+ * We intentionally do NOT call quoteGasPrice().
+ * That is the Bradbury call currently causing
+ * your transaction flow to revert.
+ */
+const FEE_MANAGER_ABI = [
+  {
+    type: "function",
+    name: "GENPerTimeUnit",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
+
+  {
+    type: "function",
+    name: "storageUnitPrice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
+
+  {
+    type: "function",
+    name: "messageFeeParamsBudgetFloor",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
+
+  {
+    type: "function",
+    name: "calculateRoundFees",
+    stateMutability: "view",
+    inputs: [
+      {
+        name: "_feesDistribution",
+        type: "tuple",
+        components: [
+          {
+            name:
+              "leaderTimeunitsAllocation",
+            type: "uint256",
+          },
+          {
+            name:
+              "validatorTimeunitsAllocation",
+            type: "uint256",
+          },
+          {
+            name: "appealRounds",
+            type: "uint256",
+          },
+          {
+            name:
+              "executionBudgetPerRound",
+            type: "uint256",
+          },
+          {
+            name:
+              "executionConsumed",
+            type: "uint256",
+          },
+          {
+            name:
+              "totalMessageFees",
+            type: "uint256",
+          },
+          {
+            name: "rotations",
+            type: "uint256[]",
+          },
+          {
+            name:
+              "maxPriceGenPerTimeUnit",
+            type: "uint256",
+          },
+          {
+            name:
+              "storageFeeMaxGasPrice",
+            type: "uint256",
+          },
+          {
+            name:
+              "receiptFeeMaxGasPrice",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "_numOfValidators",
+        type: "uint256",
+      },
+      {
+        name: "round",
+        type: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "totalFeesToPay",
+        type: "uint256",
+      },
+    ],
+  },
+] as const;
+
 export type ProofWorkResult = {
   id: string;
+
   title: string;
+
   criteria: string;
+
   evidence_url: string;
+
   status:
     | "OPEN"
     | "SUBMITTED"
     | "VERIFIED"
     | string;
+
   score: number;
+
   approved: boolean;
+
   summary: string;
 };
 
@@ -45,17 +202,21 @@ type Eip1193Provider = {
 
   on?: (
     event: string,
-    listener: (...args: unknown[]) => void,
+    listener: (
+      ...args: unknown[]
+    ) => void,
   ) => void;
 
   removeListener?: (
     event: string,
-    listener: (...args: unknown[]) => void,
+    listener: (
+      ...args: unknown[]
+    ) => void,
   ) => void;
 };
 
 /**
- * Get the injected browser wallet.
+ * Get browser wallet.
  */
 export function getWalletProvider(): Eip1193Provider {
   const provider = (
@@ -66,7 +227,7 @@ export function getWalletProvider(): Eip1193Provider {
 
   if (!provider) {
     throw new Error(
-      "No browser wallet detected. Please install Rabby, MetaMask, or another EIP-1193 wallet.",
+      "No browser wallet detected. Install Rabby or another EIP-1193 wallet.",
     );
   }
 
@@ -77,11 +238,8 @@ export function getWalletProvider(): Eip1193Provider {
  * Get wallet chain ID.
  */
 export async function getWalletChainId() {
-  const provider =
-    getWalletProvider();
-
   return String(
-    await provider.request({
+    await getWalletProvider().request({
       method: "eth_chainId",
     }),
   ).toLowerCase();
@@ -89,11 +247,6 @@ export async function getWalletChainId() {
 
 /**
  * Make sure the wallet is on Bradbury.
- *
- * We deliberately do not call client.connect()
- * because GenLayerJS's connect helper uses
- * MetaMask Snap APIs that are not appropriate
- * for Rabby.
  */
 export async function ensureBradburyNetwork(
   provider = getWalletProvider(),
@@ -101,7 +254,8 @@ export async function ensureBradburyNetwork(
   const currentChainId =
     String(
       await provider.request({
-        method: "eth_chainId",
+        method:
+          "eth_chainId",
       }),
     ).toLowerCase();
 
@@ -116,6 +270,7 @@ export async function ensureBradburyNetwork(
     await provider.request({
       method:
         "wallet_switchEthereumChain",
+
       params: [
         {
           chainId:
@@ -125,7 +280,8 @@ export async function ensureBradburyNetwork(
     });
   } catch (error: unknown) {
     const code =
-      typeof error === "object" &&
+      typeof error ===
+        "object" &&
       error !== null &&
       "code" in error
         ? Number(
@@ -146,6 +302,7 @@ export async function ensureBradburyNetwork(
     await provider.request({
       method:
         "wallet_addEthereumChain",
+
       params: [
         {
           chainId:
@@ -174,6 +331,7 @@ export async function ensureBradburyNetwork(
     await provider.request({
       method:
         "wallet_switchEthereumChain",
+
       params: [
         {
           chainId:
@@ -186,7 +344,8 @@ export async function ensureBradburyNetwork(
   const verifiedChainId =
     String(
       await provider.request({
-        method: "eth_chainId",
+        method:
+          "eth_chainId",
       }),
     ).toLowerCase();
 
@@ -201,45 +360,42 @@ export async function ensureBradburyNetwork(
 }
 
 /**
- * Read-only client.
- *
- * This communicates directly with the
- * GenLayer Bradbury RPC.
+ * Read-only GenLayer client.
  */
 export function readClient() {
   return createClient({
-    chain: testnetBradbury,
+    chain:
+      testnetBradbury,
   });
 }
 
 /**
- * Wallet-backed client.
+ * Wallet-backed GenLayer client.
  *
- * Rabby signs through the EIP-1193 provider.
+ * No MetaMask Snap connection is used.
  */
 export function walletClient(
   address: `0x${string}`,
 ) {
   return createClient({
-    chain: testnetBradbury,
-    account: address,
+    chain:
+      testnetBradbury,
+
+    account:
+      address,
+
     provider:
       getWalletProvider(),
   });
 }
 
 /**
- * Connect Rabby/MetaMask without using
- * GenLayerJS's MetaMask Snap connector.
+ * Connect wallet.
  */
 export async function connectWallet() {
   const provider =
     getWalletProvider();
 
-  /*
-   * Ask the wallet to expose the selected
-   * account.
-   */
   const accounts =
     (await provider.request({
       method:
@@ -257,24 +413,10 @@ export async function connectWallet() {
     );
   }
 
-  /*
-   * Switch to Bradbury.
-   */
   await ensureBradburyNetwork(
     provider,
   );
 
-  /*
-   * Create the GenLayerJS wallet client.
-   *
-   * IMPORTANT:
-   * We intentionally do NOT call:
-   *
-   * client.connect("testnetBradbury")
-   *
-   * because that invokes the SDK's MetaMask
-   * Snap connector.
-   */
   const client =
     walletClient(address);
 
@@ -286,8 +428,7 @@ export async function connectWallet() {
 }
 
 /**
- * Restore an already-authorized wallet
- * without opening a permission popup.
+ * Restore wallet silently.
  */
 export async function restoreWallet() {
   const provider =
@@ -295,7 +436,8 @@ export async function restoreWallet() {
 
   const accounts =
     (await provider.request({
-      method: "eth_accounts",
+      method:
+        "eth_accounts",
     })) as string[];
 
   const address =
@@ -310,7 +452,8 @@ export async function restoreWallet() {
   const chainId =
     String(
       await provider.request({
-        method: "eth_chainId",
+        method:
+          "eth_chainId",
       }),
     ).toLowerCase();
 
@@ -370,21 +513,20 @@ export async function changeWallet() {
 }
 
 /**
- * Get currently authorized account.
+ * Current authorized account.
  */
 export async function getConnectedAccount() {
-  const provider =
-    getWalletProvider();
-
   const accounts =
-    (await provider.request({
-      method: "eth_accounts",
+    (await getWalletProvider().request({
+      method:
+        "eth_accounts",
     })) as string[];
 
   return (
     (accounts[0] as
       | `0x${string}`
-      | undefined) ?? null
+      | undefined) ??
+    null
   );
 }
 
@@ -408,13 +550,277 @@ export async function getWork(
   return result as ProofWorkResult;
 }
 
+/**
+ * Read a uint256 from the Bradbury
+ * Fee Manager using raw eth_call.
+ */
+async function readFeeManagerUint(
+  provider: Eip1193Provider,
+  functionName:
+    | "GENPerTimeUnit"
+    | "storageUnitPrice"
+    | "messageFeeParamsBudgetFloor",
+  gasPrice: string,
+): Promise<bigint> {
+  const data =
+    encodeFunctionData({
+      abi:
+        FEE_MANAGER_ABI,
+
+      functionName,
+
+      args: [],
+    });
+
+  const raw =
+    (await provider.request({
+      method:
+        "eth_call",
+
+      params: [
+        {
+          to:
+            FEE_MANAGER_ADDRESS,
+
+          data,
+
+          gasPrice,
+        },
+
+        "latest",
+      ],
+    })) as `0x${string}`;
+
+  return decodeFunctionResult({
+    abi:
+      FEE_MANAGER_ABI,
+
+    functionName,
+
+    data: raw,
+  }) as bigint;
+}
+
+/**
+ * Build a Bradbury-compatible fee
+ * distribution without calling the
+ * problematic quoteGasPrice().
+ */
+async function buildBradburyFees(
+  provider: Eip1193Provider,
+) {
+  const gasPrice =
+    (await provider.request({
+      method:
+        "eth_gasPrice",
+    })) as string;
+
+  const [
+    genPerTimeUnit,
+    storageUnitPrice,
+  ] = await Promise.all([
+    readFeeManagerUint(
+      provider,
+      "GENPerTimeUnit",
+      gasPrice,
+    ),
+
+    readFeeManagerUint(
+      provider,
+      "storageUnitPrice",
+      gasPrice,
+    ),
+  ]);
+
+  let messageBudgetFloor =
+    0n;
+
+  try {
+    messageBudgetFloor =
+      await readFeeManagerUint(
+        provider,
+        "messageFeeParamsBudgetFloor",
+        gasPrice,
+      );
+  } catch {
+    /*
+     * The SDK itself treats this field as
+     * potentially unreliable and recomputes
+     * the floor when necessary.
+     */
+    messageBudgetFloor =
+      0n;
+  }
+
+  const networkGasPrice =
+    BigInt(gasPrice);
+
+  /*
+   * Give the live gas price 20% headroom.
+   */
+  const receiptFeeMaxGasPrice =
+    networkGasPrice === 0n
+      ? 1n
+      : (
+          networkGasPrice *
+            12_000n +
+          9_999n
+        ) /
+          10_000n;
+
+  const maxPriceGenPerTimeUnit =
+    genPerTimeUnit === 0n
+      ? 0n
+      : (
+          genPerTimeUnit *
+            12_000n +
+          9_999n
+        ) /
+          10_000n;
+
+  const storageFeeMaxGasPrice =
+    storageUnitPrice === 0n
+      ? 0n
+      : (
+          storageUnitPrice *
+            12_000n +
+          9_999n
+        ) /
+          10_000n;
+
+  /*
+   * Same baseline used by current
+   * GenLayerJS fee estimation.
+   */
+  const defaultExecutionBudget =
+    500_000n;
+
+  const transactionExecutionGas =
+    100_000_000n;
+
+  const executionBudgetFromGas =
+    receiptFeeMaxGasPrice *
+    transactionExecutionGas;
+
+  const executionBudgetPerRound =
+    maxBigInt(
+      defaultExecutionBudget,
+      messageBudgetFloor,
+      executionBudgetFromGas,
+    );
+
+  const distribution = {
+    leaderTimeunitsAllocation:
+      100n,
+
+    validatorTimeunitsAllocation:
+      200n,
+
+    appealRounds:
+      0n,
+
+    executionBudgetPerRound,
+
+    executionConsumed:
+      0n,
+
+    totalMessageFees:
+      0n,
+
+    rotations: [0n],
+
+    maxPriceGenPerTimeUnit,
+
+    storageFeeMaxGasPrice,
+
+    receiptFeeMaxGasPrice,
+  };
+
+  const calculateData =
+    encodeFunctionData({
+      abi:
+        FEE_MANAGER_ABI,
+
+      functionName:
+        "calculateRoundFees",
+
+      args: [
+        distribution,
+        5n,
+        0n,
+      ],
+    });
+
+  const roundFeeRaw =
+    (await provider.request({
+      method:
+        "eth_call",
+
+      params: [
+        {
+          to:
+            FEE_MANAGER_ADDRESS,
+
+          data:
+            calculateData,
+
+          gasPrice,
+        },
+
+        "latest",
+      ],
+    })) as `0x${string}`;
+
+  const roundFees =
+    decodeFunctionResult({
+      abi:
+        FEE_MANAGER_ABI,
+
+      functionName:
+        "calculateRoundFees",
+
+      data:
+        roundFeeRaw,
+    }) as bigint;
+
+  return {
+    distribution,
+
+    messageAllocations:
+      [],
+
+    feeValue:
+      roundFees,
+  };
+}
+
+function maxBigInt(
+  ...values: bigint[]
+) {
+  let result =
+    values[0] ?? 0n;
+
+  for (
+    const value of values
+  ) {
+    if (value > result) {
+      result = value;
+    }
+  }
+
+  return result;
+}
+
 type WriteFunction =
   | "create_work"
   | "submit_evidence"
   | "verify_work";
 
 /**
- * Write to ProofWork.
+ * Send a ProofWork transaction.
+ *
+ * This bypasses the broken Bradbury
+ * quoteGasPrice() estimation path.
  */
 export async function sendWrite(
   client: ReturnType<
@@ -423,6 +829,18 @@ export async function sendWrite(
   functionName: WriteFunction,
   args: string[],
 ) {
+  const provider =
+    getWalletProvider();
+
+  await ensureBradburyNetwork(
+    provider,
+  );
+
+  const fees =
+    await buildBradburyFees(
+      provider,
+    );
+
   const write = {
     address:
       CONTRACT_ADDRESS,
@@ -432,39 +850,22 @@ export async function sendWrite(
     args,
   } as const;
 
-  /*
-   * GenLayer requires the fee information
-   * before submitting the transaction.
-   */
-  const estimate =
-    await client.estimateTransactionFeesForWrite(
-      write,
-    );
-
-  /*
-   * Send the transaction through Rabby's
-   * EIP-1193 provider.
-   */
   const txHash =
     await client.writeContract({
       ...write,
 
       fees: {
         distribution:
-          estimate.distribution,
+          fees.distribution,
 
         messageAllocations:
-          estimate.messageAllocations,
+          fees.messageAllocations,
 
         feeValue:
-          estimate.feeValue,
+          fees.feeValue,
       },
     });
 
-  /*
-   * Wait until GenLayer finalizes the
-   * consensus transaction.
-   */
   const receipt =
     await client.waitForTransactionReceipt(
       {
