@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import {
   connectWallet,
@@ -17,23 +20,35 @@ import {
   type ProofWorkResult,
 } from "@/lib/genlayer";
 
-function shortAddress(address: string) {
+function shortAddress(
+  address: string,
+) {
   if (!address) {
     return "";
   }
 
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+  return `${address.slice(
+    0,
+    6,
+  )}…${address.slice(-4)}`;
 }
 
-function shortHash(hash: string) {
+function shortHash(
+  hash: string,
+) {
   if (!hash) {
     return "";
   }
 
-  return `${hash.slice(0, 10)}…${hash.slice(-8)}`;
+  return `${hash.slice(
+    0,
+    10,
+  )}…${hash.slice(-8)}`;
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(
+  error: unknown,
+) {
   if (error instanceof Error) {
     return error.message;
   }
@@ -42,48 +57,75 @@ function errorMessage(error: unknown) {
 }
 
 export default function Home() {
-  const [wallet, setWallet] = useState("");
+  const [wallet, setWallet] =
+    useState("");
 
-  const [client, setClient] = useState<
-    Awaited<ReturnType<typeof connectWallet>>["client"] | null
-  >(null);
+  const [client, setClient] =
+    useState<
+      Awaited<
+        ReturnType<
+          typeof connectWallet
+        >
+      >["client"] | null
+    >(null);
 
-  const [networkReady, setNetworkReady] = useState(false);
+  const [networkReady, setNetworkReady] =
+    useState(false);
 
-  const [workId, setWorkId] = useState("demo-001");
+  const [busy, setBusy] =
+    useState(false);
 
-  const [title, setTitle] = useState(
-    "Landing page delivery",
-  );
+  const [walletAction, setWalletAction] =
+    useState<
+      | "connect"
+      | "disconnect"
+      | "change"
+      | "switch"
+      | null
+    >(null);
 
-  const [criteria, setCriteria] = useState(
-    "The evidence must show a responsive page, a clear headline, and working navigation.",
-  );
+  const [workId, setWorkId] =
+    useState("demo-001");
 
-  const [evidence, setEvidence] = useState(
-    "https://example.com",
-  );
+  const [title, setTitle] =
+    useState(
+      "Landing page delivery",
+    );
 
-  const [status, setStatus] = useState(
-    "Connect your wallet to begin.",
-  );
+  const [criteria, setCriteria] =
+    useState(
+      "The evidence must show a responsive page, a clear headline, and working navigation.",
+    );
+
+  const [evidence, setEvidence] =
+    useState(
+      "https://example.com",
+    );
+
+  const [status, setStatus] =
+    useState(
+      "Connect your wallet to begin.",
+    );
 
   const [result, setResult] =
-    useState<ProofWorkResult | null>(null);
+    useState<ProofWorkResult | null>(
+      null,
+    );
 
-  const [busy, setBusy] = useState(false);
-
-  const [txHash, setTxHash] = useState("");
+  const [txHash, setTxHash] =
+    useState("");
 
   async function refresh() {
-    const trimmedWorkId = workId.trim();
+    const id =
+      workId.trim();
 
-    if (!trimmedWorkId) {
+    if (!id) {
       return;
     }
 
     try {
-      const work = await getWork(trimmedWorkId);
+      const work =
+        await getWork(id);
 
       setResult(work);
     } catch {
@@ -94,15 +136,23 @@ export default function Home() {
   async function connect() {
     try {
       setBusy(true);
+      setWalletAction("connect");
 
       setStatus(
-        "Checking wallet and GenLayer Testnet Bradbury network…",
+        "Connecting to GenLayer Testnet Bradbury…",
       );
 
-      const connected = await connectWallet();
+      const connected =
+        await connectWallet();
 
-      setWallet(connected.address);
-      setClient(connected.client);
+      setWallet(
+        connected.address,
+      );
+
+      setClient(
+        connected.client,
+      );
+
       setNetworkReady(true);
 
       setStatus(
@@ -113,22 +163,35 @@ export default function Home() {
     } catch (error) {
       setNetworkReady(false);
 
-      setStatus(errorMessage(error));
+      setStatus(
+        errorMessage(error),
+      );
     } finally {
       setBusy(false);
+      setWalletAction(null);
     }
   }
 
   async function handleChangeWallet() {
     try {
       setBusy(true);
+      setWalletAction("change");
 
-      setStatus("Choose a wallet account…");
+      setStatus(
+        "Opening wallet account selector…",
+      );
 
-      const connected = await changeWallet();
+      const connected =
+        await changeWallet();
 
-      setWallet(connected.address);
-      setClient(connected.client);
+      setWallet(
+        connected.address,
+      );
+
+      setClient(
+        connected.client,
+      );
+
       setNetworkReady(true);
 
       setStatus(
@@ -137,30 +200,75 @@ export default function Home() {
         )}`,
       );
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(
+        errorMessage(error),
+      );
     } finally {
       setBusy(false);
+      setWalletAction(null);
     }
   }
 
   function disconnect() {
-    setWallet("");
-    setClient(null);
-    setNetworkReady(false);
-    setTxHash("");
+    setWalletAction(
+      "disconnect",
+    );
 
     setStatus(
-      "Wallet disconnected from ProofWork.",
+      "Disconnecting ProofWork wallet session…",
     );
+
+    window.setTimeout(() => {
+      setWallet("");
+      setClient(null);
+      setNetworkReady(false);
+      setTxHash("");
+      setResult(null);
+
+      setStatus(
+        "Wallet disconnected from ProofWork.",
+      );
+
+      setWalletAction(null);
+    }, 450);
+  }
+
+  async function switchNetwork() {
+    try {
+      setBusy(true);
+      setWalletAction("switch");
+
+      setStatus(
+        "Switching to GenLayer Testnet Bradbury…",
+      );
+
+      await ensureBradburyNetwork();
+
+      setNetworkReady(true);
+
+      setStatus(
+        "GenLayer Testnet Bradbury selected.",
+      );
+    } catch (error) {
+      setStatus(
+        errorMessage(error),
+      );
+    } finally {
+      setBusy(false);
+      setWalletAction(null);
+    }
   }
 
   useEffect(() => {
     let provider:
-      | ReturnType<typeof getWalletProvider>
+      | ReturnType<
+          typeof getWalletProvider
+        >
       | null = null;
 
     try {
-      provider = getWalletProvider();
+      provider =
+        getWalletProvider();
     } catch {
       provider = null;
     }
@@ -171,14 +279,21 @@ export default function Home() {
       }
 
       try {
-        const connected = await restoreWallet();
+        const connected =
+          await restoreWallet();
 
         if (!connected) {
           return;
         }
 
-        setWallet(connected.address);
-        setClient(connected.client);
+        setWallet(
+          connected.address,
+        );
+
+        setClient(
+          connected.client,
+        );
+
         setNetworkReady(true);
 
         setStatus(
@@ -187,7 +302,7 @@ export default function Home() {
           )}`,
         );
       } catch {
-        // Wallet is optional until manually connected.
+        // Wallet is optional.
       }
     }
 
@@ -196,18 +311,22 @@ export default function Home() {
     const handleAccountsChanged = (
       ...args: unknown[]
     ) => {
-      const accounts = args[0] as
-        | string[]
-        | undefined;
+      const accounts =
+        args[0] as
+          | string[]
+          | undefined;
 
-      const address = accounts?.[0] ?? "";
+      const address =
+        accounts?.[0] ?? "";
 
       if (!address) {
         setWallet("");
         setClient(null);
         setNetworkReady(false);
 
-        setStatus("Wallet disconnected.");
+        setStatus(
+          "Wallet disconnected.",
+        );
 
         return;
       }
@@ -226,25 +345,28 @@ export default function Home() {
     const handleChainChanged = (
       ...args: unknown[]
     ) => {
-      const chainId = String(
-        args[0] ?? "",
-      ).toLowerCase();
+      const chainId =
+        String(
+          args[0] ?? "",
+        ).toLowerCase();
 
-      const isBradbury =
+      const correctNetwork =
         chainId ===
         BRADBURY_CHAIN_ID.toLowerCase();
 
       setClient(null);
 
-      setNetworkReady(isBradbury);
+      setNetworkReady(
+        correctNetwork,
+      );
 
-      if (isBradbury) {
+      if (correctNetwork) {
         setStatus(
-          `GenLayer Testnet Bradbury selected. Chain ID ${BRADBURY_CHAIN_ID_DECIMAL}. Click Connect wallet to continue.`,
+          `GenLayer Testnet Bradbury selected · Chain ${BRADBURY_CHAIN_ID_DECIMAL}.`,
         );
       } else {
         setStatus(
-          "Wrong network. Click Switch network to use GenLayer Testnet Bradbury.",
+          "Wrong network. Switch to GenLayer Testnet Bradbury.",
         );
       }
     };
@@ -279,127 +401,149 @@ export default function Home() {
   }, []);
 
   async function create() {
-    if (!client || !networkReady) {
+    if (
+      !client ||
+      !networkReady
+    ) {
       setStatus(
         "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
+
       return;
     }
 
-    const trimmedWorkId = workId.trim();
-    const trimmedTitle = title.trim();
-    const trimmedCriteria = criteria.trim();
+    const id =
+      workId.trim();
+
+    const workTitle =
+      title.trim();
+
+    const workCriteria =
+      criteria.trim();
 
     if (
-      !trimmedWorkId ||
-      !trimmedTitle ||
-      !trimmedCriteria
+      !id ||
+      !workTitle ||
+      !workCriteria
     ) {
       setStatus(
         "Work ID, title, and acceptance criteria are required.",
       );
+
       return;
     }
 
     setBusy(true);
 
     setStatus(
-      "Creating the work request on GenLayer…",
+      "Creating work request on GenLayer…",
     );
 
     setTxHash("");
 
     try {
-      const response = await sendWrite(
-        client,
-        "create_work",
-        [
-          trimmedWorkId,
-          trimmedTitle,
-          trimmedCriteria,
-        ],
+      const response =
+        await sendWrite(
+          client,
+          "create_work",
+          [
+            id,
+            workTitle,
+            workCriteria,
+          ],
+        );
+
+      setTxHash(
+        response.txHash,
       );
 
-      setTxHash(response.txHash);
-
       setStatus(
-        "Work request finalized. You can now submit public evidence.",
+        "Work request finalized.",
       );
 
       await refresh();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(
+        errorMessage(error),
+      );
     } finally {
       setBusy(false);
     }
   }
 
   async function submit() {
-    if (!client || !networkReady) {
+    if (
+      !client ||
+      !networkReady
+    ) {
       setStatus(
         "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
+
       return;
     }
 
-    const trimmedEvidence =
+    const url =
       evidence.trim();
 
     if (
-      !trimmedEvidence.startsWith(
+      !url.startsWith(
         "https://",
       )
     ) {
       setStatus(
         "Evidence URL must start with https://",
       );
-      return;
-    }
 
-    if (!workId.trim()) {
-      setStatus(
-        "Enter a Work ID before submitting evidence.",
-      );
       return;
     }
 
     setBusy(true);
 
     setStatus(
-      "Submitting evidence to the ProofWork contract…",
+      "Submitting evidence…",
     );
 
     setTxHash("");
 
     try {
-      const response = await sendWrite(
-        client,
-        "submit_evidence",
-        [
-          workId.trim(),
-          trimmedEvidence,
-        ],
+      const response =
+        await sendWrite(
+          client,
+          "submit_evidence",
+          [
+            workId.trim(),
+            url,
+          ],
+        );
+
+      setTxHash(
+        response.txHash,
       );
 
-      setTxHash(response.txHash);
-
       setStatus(
-        "Evidence submitted. The work is ready for GenLayer verification.",
+        "Evidence submitted successfully.",
       );
 
       await refresh();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(
+        errorMessage(error),
+      );
     } finally {
       setBusy(false);
     }
   }
 
   async function verify() {
-    if (!client || !networkReady) {
+    if (
+      !client ||
+      !networkReady
+    ) {
       setStatus(
         "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
+
       return;
     }
 
@@ -407,6 +551,7 @@ export default function Home() {
       setStatus(
         "Enter a Work ID before verification.",
       );
+
       return;
     }
 
@@ -419,13 +564,16 @@ export default function Home() {
     setTxHash("");
 
     try {
-      const response = await sendWrite(
-        client,
-        "verify_work",
-        [workId.trim()],
-      );
+      const response =
+        await sendWrite(
+          client,
+          "verify_work",
+          [workId.trim()],
+        );
 
-      setTxHash(response.txHash);
+      setTxHash(
+        response.txHash,
+      );
 
       setStatus(
         "Verification finalized. The consensus-backed verdict is now stored onchain.",
@@ -433,44 +581,25 @@ export default function Home() {
 
       await refresh();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(
+        errorMessage(error),
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  async function switchNetwork() {
-    try {
-      setBusy(true);
-
-      setStatus(
-        "Switching wallet to GenLayer Testnet Bradbury…",
-      );
-
-      await ensureBradburyNetwork();
-
-      setNetworkReady(true);
-
-      setStatus(
-        "GenLayer Testnet Bradbury selected. Click Connect wallet to authorize the account.",
-      );
-    } catch (error) {
-      setStatus(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const connected = Boolean(
-    wallet &&
-      client &&
-      networkReady,
-  );
+  const connected =
+    Boolean(
+      wallet &&
+        client &&
+        networkReady,
+    );
 
   const contractDisplay =
-    CONTRACT_ADDRESS
-      ? shortAddress(CONTRACT_ADDRESS)
-      : "Not deployed";
+    shortAddress(
+      CONTRACT_ADDRESS,
+    );
 
   return (
     <main>
@@ -486,59 +615,108 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="row">
-          <span className="badge">
+        <div className="wallet-area">
+          <span className="network-badge">
             Bradbury ·{" "}
             {BRADBURY_CHAIN_ID_DECIMAL}
           </span>
 
-          {connected ? (
-            <>
-              <span className="badge">
-                ● Connected ·{" "}
-                {shortAddress(wallet)}
+          {!connected ? (
+            <div className="wallet-controls">
+              {wallet &&
+                !networkReady && (
+                  <span className="wallet-warning">
+                    Wrong network
+                  </span>
+                )}
+
+              <button
+                className={`wallet-button ${
+                  busy
+                    ? "is-loading"
+                    : ""
+                }`}
+                onClick={
+                  wallet &&
+                  !networkReady
+                    ? switchNetwork
+                    : connect
+                }
+                disabled={busy}
+              >
+                {busy ? (
+                  <>
+                    <span className="spinner" />
+
+                    {walletAction ===
+                    "switch"
+                      ? "Switching…"
+                      : "Connecting…"}
+                  </>
+                ) : (
+                  <>
+                    <span className="wallet-icon">
+                      ◈
+                    </span>
+
+                    {wallet &&
+                    !networkReady
+                      ? "Switch network"
+                      : "Connect wallet"}
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="connected-wallet">
+              <span className="connected-pill">
+                <span className="pulse-dot" />
+
+                <span>
+                  Connected
+                </span>
+
+                <span className="wallet-address">
+                  {shortAddress(
+                    wallet,
+                  )}
+                </span>
               </span>
 
               <button
-                className="secondary"
+                className="wallet-action"
                 onClick={
                   handleChangeWallet
                 }
                 disabled={busy}
               >
-                Change wallet
+                {walletAction ===
+                "change" ? (
+                  <>
+                    <span className="spinner small-spinner" />
+                    Changing…
+                  </>
+                ) : (
+                  "Change wallet"
+                )}
               </button>
 
               <button
-                className="secondary"
+                className="disconnect-button"
                 onClick={disconnect}
                 disabled={busy}
               >
-                Disconnect
+                {walletAction ===
+                "disconnect" ? (
+                  <>
+                    <span className="spinner small-spinner" />
+                    Disconnecting…
+                  </>
+                ) : (
+                  "Disconnect"
+                )}
               </button>
-            </>
-          ) : (
-            <>
-              {!networkReady && (
-                <button
-                  className="secondary"
-                  onClick={
-                    switchNetwork
-                  }
-                  disabled={busy}
-                >
-                  Switch network
-                </button>
-              )}
-
-              <button
-                className="secondary"
-                onClick={connect}
-                disabled={busy}
-              >
-                Connect wallet
-              </button>
-            </>
+            </div>
           )}
         </div>
       </nav>
@@ -589,7 +767,7 @@ export default function Home() {
               )
             }
             maxLength={80}
-            placeholder="e.g. demo-001"
+            placeholder="demo-001"
           />
 
           <label>
@@ -784,7 +962,8 @@ export default function Home() {
 
             <div className="summary">
               <div className="small">
-                Evidence-grounded summary
+                Evidence-grounded
+                summary
               </div>
 
               <p>
@@ -802,7 +981,8 @@ export default function Home() {
           {contractDisplay}
         </code>{" "}
         · GenLayer Testnet Bradbury ·
-        Chain {BRADBURY_CHAIN_ID_DECIMAL}
+        Chain{" "}
+        {BRADBURY_CHAIN_ID_DECIMAL}
       </footer>
     </main>
   );
