@@ -1,21 +1,35 @@
 import { createClient } from "genlayer-js";
-import { studioDevnet } from "genlayer-js/chains";
+import { testnetAsimov } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 export const CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-    "0x4F0b22649e8503886761E87Aafe86869b4E444c5") as `0x${string}`;
+    "") as `0x${string}`;
 
-export const STUDIO_DEV_CHAIN_ID = "0xF1CD";
-export const STUDIO_DEV_CHAIN_ID_DECIMAL = 61997;
-export const STUDIO_DEV_RPC = "https://studio-dev.genlayer.com/api";
+export const TESTNET_CHAIN_ID = "0x107D";
+export const TESTNET_CHAIN_ID_DECIMAL = 4221;
+
+/*
+ * GenLayer Testnet Asimov
+ *
+ * Chain ID: 4221
+ *
+ * The actual GenLayer RPC configuration is provided
+ * by the testnetAsimov GenLayerJS chain definition.
+ */
+export const TESTNET_RPC =
+  "https://rpc-asimov.genlayer.com";
 
 export type ProofWorkResult = {
   id: string;
   title: string;
   criteria: string;
   evidence_url: string;
-  status: "OPEN" | "SUBMITTED" | "VERIFIED" | string;
+  status:
+    | "OPEN"
+    | "SUBMITTED"
+    | "VERIFIED"
+    | string;
   score: number;
   approved: boolean;
   summary: string;
@@ -47,7 +61,7 @@ export function getWalletProvider(): Eip1193Provider {
 
   if (!provider) {
     throw new Error(
-      "No browser wallet detected. Install MetaMask or another EIP-1193 wallet.",
+      "No browser wallet detected. Install Rabby, MetaMask, or another EIP-1193 wallet.",
     );
   }
 
@@ -62,7 +76,11 @@ export async function getWalletChainId() {
   ).toLowerCase();
 }
 
-export async function ensureStudioDevNetwork(
+/**
+ * Make sure the user's wallet is connected
+ * to GenLayer Testnet Asimov.
+ */
+export async function ensureTestnetNetwork(
   provider = getWalletProvider(),
 ) {
   const currentChainId = String(
@@ -71,7 +89,10 @@ export async function ensureStudioDevNetwork(
     }),
   ).toLowerCase();
 
-  if (currentChainId === STUDIO_DEV_CHAIN_ID.toLowerCase()) {
+  if (
+    currentChainId ===
+    TESTNET_CHAIN_ID.toLowerCase()
+  ) {
     return;
   }
 
@@ -80,7 +101,7 @@ export async function ensureStudioDevNetwork(
       method: "wallet_switchEthereumChain",
       params: [
         {
-          chainId: STUDIO_DEV_CHAIN_ID,
+          chainId: TESTNET_CHAIN_ID,
         },
       ],
     });
@@ -94,10 +115,13 @@ export async function ensureStudioDevNetwork(
           )
         : undefined;
 
-    // 4902 = network isn't added to wallet yet
+    /*
+     * 4902 means the network is not yet
+     * registered in the wallet.
+     */
     if (code !== 4902) {
       throw new Error(
-        "Please switch your wallet to GenLayer Studio Dev (chain 61997) and try again.",
+        "Please switch your wallet to GenLayer Testnet Asimov (chain 4221) and try again.",
       );
     }
 
@@ -105,14 +129,14 @@ export async function ensureStudioDevNetwork(
       method: "wallet_addEthereumChain",
       params: [
         {
-          chainId: STUDIO_DEV_CHAIN_ID,
-          chainName: "GenLayer Studio Dev",
+          chainId: TESTNET_CHAIN_ID,
+          chainName: "GenLayer Testnet Asimov",
           nativeCurrency: {
             name: "GEN",
             symbol: "GEN",
             decimals: 18,
           },
-          rpcUrls: [STUDIO_DEV_RPC],
+          rpcUrls: [TESTNET_RPC],
         },
       ],
     });
@@ -125,25 +149,32 @@ export async function ensureStudioDevNetwork(
   ).toLowerCase();
 
   if (
-    verifiedChainId !== STUDIO_DEV_CHAIN_ID.toLowerCase()
+    verifiedChainId !==
+    TESTNET_CHAIN_ID.toLowerCase()
   ) {
     throw new Error(
-      "Wallet network did not switch to GenLayer Studio Dev (chain 61997).",
+      "Wallet network did not switch to GenLayer Testnet Asimov (chain 4221).",
     );
   }
 }
 
+/**
+ * Read-only GenLayer client.
+ */
 export function readClient() {
   return createClient({
-    chain: studioDevnet,
+    chain: testnetAsimov,
   });
 }
 
+/**
+ * Wallet-backed GenLayer client.
+ */
 export function walletClient(
   address: `0x${string}`,
 ) {
   return createClient({
-    chain: studioDevnet,
+    chain: testnetAsimov,
     account: address,
     provider: getWalletProvider(),
   });
@@ -151,12 +182,11 @@ export function walletClient(
 
 /**
  * Explicitly connect a wallet.
- * This may open the wallet permission/account selector.
  */
 export async function connectWallet() {
   const provider = getWalletProvider();
 
-  await ensureStudioDevNetwork(provider);
+  await ensureTestnetNetwork(provider);
 
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
@@ -167,12 +197,14 @@ export async function connectWallet() {
     | undefined;
 
   if (!address) {
-    throw new Error("No wallet account returned.");
+    throw new Error(
+      "No wallet account returned.",
+    );
   }
 
   const client = walletClient(address);
 
-  await client.connect("studioDevnet");
+  await client.connect("testnetAsimov");
 
   return {
     address,
@@ -183,7 +215,8 @@ export async function connectWallet() {
 
 /**
  * Restore an already-authorized wallet silently.
- * This does NOT open a wallet permission popup.
+ *
+ * This does not open a wallet popup.
  */
 export async function restoreWallet() {
   const provider = getWalletProvider();
@@ -207,14 +240,15 @@ export async function restoreWallet() {
   ).toLowerCase();
 
   if (
-    chainId !== STUDIO_DEV_CHAIN_ID.toLowerCase()
+    chainId !==
+    TESTNET_CHAIN_ID.toLowerCase()
   ) {
     return null;
   }
 
   const client = walletClient(address);
 
-  await client.connect("studioDevnet");
+  await client.connect("testnetAsimov");
 
   return {
     address,
@@ -224,14 +258,13 @@ export async function restoreWallet() {
 }
 
 /**
- * Opens the wallet account picker and connects
- * the selected account without requiring another
- * frontend connection flow.
+ * Open the wallet account selector and
+ * connect the selected account.
  */
 export async function changeWallet() {
   const provider = getWalletProvider();
 
-  await ensureStudioDevNetwork(provider);
+  await ensureTestnetNetwork(provider);
 
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
@@ -242,12 +275,14 @@ export async function changeWallet() {
     | undefined;
 
   if (!address) {
-    throw new Error("No wallet account selected.");
+    throw new Error(
+      "No wallet account selected.",
+    );
   }
 
   const client = walletClient(address);
 
-  await client.connect("studioDevnet");
+  await client.connect("testnetAsimov");
 
   return {
     address,
@@ -262,14 +297,24 @@ export async function getConnectedAccount() {
   })) as string[];
 
   return (
-    (accounts[0] as `0x${string}` | undefined) ??
-    null
+    (accounts[0] as
+      | `0x${string}`
+      | undefined) ?? null
   );
 }
 
+/**
+ * Read a ProofWork record.
+ */
 export async function getWork(
   workId: string,
 ): Promise<ProofWorkResult> {
+  if (!CONTRACT_ADDRESS) {
+    throw new Error(
+      "ProofWork contract address is not configured.",
+    );
+  }
+
   const result = await readClient().readContract({
     address: CONTRACT_ADDRESS,
     functionName: "get_work",
@@ -284,11 +329,20 @@ type WriteFunction =
   | "submit_evidence"
   | "verify_work";
 
+/**
+ * Send a transaction to the ProofWork contract.
+ */
 export async function sendWrite(
   client: ReturnType<typeof walletClient>,
   functionName: WriteFunction,
   args: string[],
 ) {
+  if (!CONTRACT_ADDRESS) {
+    throw new Error(
+      "ProofWork contract address is not configured.",
+    );
+  }
+
   const write = {
     address: CONTRACT_ADDRESS,
     functionName,
@@ -303,10 +357,12 @@ export async function sendWrite(
   const txHash = await client.writeContract({
     ...write,
     fees: {
-      distribution: estimate.distribution,
+      distribution:
+        estimate.distribution,
       messageAllocations:
         estimate.messageAllocations,
-      feeValue: estimate.feeValue,
+      feeValue:
+        estimate.feeValue,
     },
   });
 
