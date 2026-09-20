@@ -3,10 +3,9 @@ import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 /**
- * ProofWork Intelligent Contract
+ * ProofWork contract
  *
- * Hard-coded intentionally.
- * No environment variables are required.
+ * No environment variables are used.
  */
 export const CONTRACT_ADDRESS =
   "0x4F0b22649e8503886761E87Aafe86869b4E444c5" as `0x${string}`;
@@ -75,27 +74,36 @@ export function getWalletProvider(): Eip1193Provider {
 }
 
 /**
- * Get current wallet chain ID.
+ * Get wallet chain ID.
  */
 export async function getWalletChainId() {
+  const provider =
+    getWalletProvider();
+
   return String(
-    await getWalletProvider().request({
+    await provider.request({
       method: "eth_chainId",
     }),
   ).toLowerCase();
 }
 
 /**
- * Ensure the wallet is using Bradbury.
+ * Make sure the wallet is on Bradbury.
+ *
+ * We deliberately do not call client.connect()
+ * because GenLayerJS's connect helper uses
+ * MetaMask Snap APIs that are not appropriate
+ * for Rabby.
  */
 export async function ensureBradburyNetwork(
   provider = getWalletProvider(),
 ) {
-  const currentChainId = String(
-    await provider.request({
-      method: "eth_chainId",
-    }),
-  ).toLowerCase();
+  const currentChainId =
+    String(
+      await provider.request({
+        method: "eth_chainId",
+      }),
+    ).toLowerCase();
 
   if (
     currentChainId ===
@@ -106,10 +114,12 @@ export async function ensureBradburyNetwork(
 
   try {
     await provider.request({
-      method: "wallet_switchEthereumChain",
+      method:
+        "wallet_switchEthereumChain",
       params: [
         {
-          chainId: BRADBURY_CHAIN_ID,
+          chainId:
+            BRADBURY_CHAIN_ID,
         },
       ],
     });
@@ -119,58 +129,82 @@ export async function ensureBradburyNetwork(
       error !== null &&
       "code" in error
         ? Number(
-            (error as { code?: unknown }).code,
+            (
+              error as {
+                code?: unknown;
+              }
+            ).code,
           )
         : undefined;
 
-    /**
-     * 4902 = network not yet added
-     */
     if (code !== 4902) {
       throw new Error(
-        "Please switch your wallet to GenLayer Testnet Bradbury (chain 4221) and try again.",
+        "Please switch your wallet to GenLayer Testnet Bradbury (chain 4221).",
       );
     }
 
     await provider.request({
-      method: "wallet_addEthereumChain",
+      method:
+        "wallet_addEthereumChain",
       params: [
         {
-          chainId: BRADBURY_CHAIN_ID,
+          chainId:
+            BRADBURY_CHAIN_ID,
+
           chainName:
             "GenLayer Testnet Bradbury",
+
           nativeCurrency: {
             name: "GEN",
             symbol: "GEN",
             decimals: 18,
           },
-          rpcUrls: [BRADBURY_RPC],
+
+          rpcUrls: [
+            BRADBURY_RPC,
+          ],
+
           blockExplorerUrls: [
             BRADBURY_EXPLORER,
           ],
         },
       ],
     });
+
+    await provider.request({
+      method:
+        "wallet_switchEthereumChain",
+      params: [
+        {
+          chainId:
+            BRADBURY_CHAIN_ID,
+        },
+      ],
+    });
   }
 
-  const verifiedChainId = String(
-    await provider.request({
-      method: "eth_chainId",
-    }),
-  ).toLowerCase();
+  const verifiedChainId =
+    String(
+      await provider.request({
+        method: "eth_chainId",
+      }),
+    ).toLowerCase();
 
   if (
     verifiedChainId !==
     BRADBURY_CHAIN_ID.toLowerCase()
   ) {
     throw new Error(
-      "Wallet network did not switch to GenLayer Testnet Bradbury (chain 4221).",
+      "Wallet is not connected to GenLayer Testnet Bradbury.",
     );
   }
 }
 
 /**
  * Read-only client.
+ *
+ * This communicates directly with the
+ * GenLayer Bradbury RPC.
  */
 export function readClient() {
   return createClient({
@@ -179,7 +213,9 @@ export function readClient() {
 }
 
 /**
- * Wallet-connected client.
+ * Wallet-backed client.
+ *
+ * Rabby signs through the EIP-1193 provider.
  */
 export function walletClient(
   address: `0x${string}`,
@@ -187,26 +223,33 @@ export function walletClient(
   return createClient({
     chain: testnetBradbury,
     account: address,
-    provider: getWalletProvider(),
+    provider:
+      getWalletProvider(),
   });
 }
 
 /**
- * Connect wallet.
+ * Connect Rabby/MetaMask without using
+ * GenLayerJS's MetaMask Snap connector.
  */
 export async function connectWallet() {
-  const provider = getWalletProvider();
+  const provider =
+    getWalletProvider();
 
-  await ensureBradburyNetwork(provider);
-
+  /*
+   * Ask the wallet to expose the selected
+   * account.
+   */
   const accounts =
     (await provider.request({
-      method: "eth_requestAccounts",
+      method:
+        "eth_requestAccounts",
     })) as string[];
 
-  const address = accounts[0] as
-    | `0x${string}`
-    | undefined;
+  const address =
+    accounts[0] as
+      | `0x${string}`
+      | undefined;
 
   if (!address) {
     throw new Error(
@@ -214,12 +257,26 @@ export async function connectWallet() {
     );
   }
 
+  /*
+   * Switch to Bradbury.
+   */
+  await ensureBradburyNetwork(
+    provider,
+  );
+
+  /*
+   * Create the GenLayerJS wallet client.
+   *
+   * IMPORTANT:
+   * We intentionally do NOT call:
+   *
+   * client.connect("testnetBradbury")
+   *
+   * because that invokes the SDK's MetaMask
+   * Snap connector.
+   */
   const client =
     walletClient(address);
-
-  await client.connect(
-    "testnetBradbury",
-  );
 
   return {
     address,
@@ -229,7 +286,8 @@ export async function connectWallet() {
 }
 
 /**
- * Restore an already-authorized wallet.
+ * Restore an already-authorized wallet
+ * without opening a permission popup.
  */
 export async function restoreWallet() {
   const provider =
@@ -240,19 +298,21 @@ export async function restoreWallet() {
       method: "eth_accounts",
     })) as string[];
 
-  const address = accounts[0] as
-    | `0x${string}`
-    | undefined;
+  const address =
+    accounts[0] as
+      | `0x${string}`
+      | undefined;
 
   if (!address) {
     return null;
   }
 
-  const chainId = String(
-    await provider.request({
-      method: "eth_chainId",
-    }),
-  ).toLowerCase();
+  const chainId =
+    String(
+      await provider.request({
+        method: "eth_chainId",
+      }),
+    ).toLowerCase();
 
   if (
     chainId !==
@@ -264,10 +324,6 @@ export async function restoreWallet() {
   const client =
     walletClient(address);
 
-  await client.connect(
-    "testnetBradbury",
-  );
-
   return {
     address,
     client,
@@ -276,24 +332,22 @@ export async function restoreWallet() {
 }
 
 /**
- * Change wallet/account.
+ * Change account.
  */
 export async function changeWallet() {
   const provider =
     getWalletProvider();
 
-  await ensureBradburyNetwork(
-    provider,
-  );
-
   const accounts =
     (await provider.request({
-      method: "eth_requestAccounts",
+      method:
+        "eth_requestAccounts",
     })) as string[];
 
-  const address = accounts[0] as
-    | `0x${string}`
-    | undefined;
+  const address =
+    accounts[0] as
+      | `0x${string}`
+      | undefined;
 
   if (!address) {
     throw new Error(
@@ -301,12 +355,12 @@ export async function changeWallet() {
     );
   }
 
+  await ensureBradburyNetwork(
+    provider,
+  );
+
   const client =
     walletClient(address);
-
-  await client.connect(
-    "testnetBradbury",
-  );
 
   return {
     address,
@@ -316,11 +370,14 @@ export async function changeWallet() {
 }
 
 /**
- * Get the currently authorized wallet account.
+ * Get currently authorized account.
  */
 export async function getConnectedAccount() {
+  const provider =
+    getWalletProvider();
+
   const accounts =
-    (await getWalletProvider().request({
+    (await provider.request({
       method: "eth_accounts",
     })) as string[];
 
@@ -332,15 +389,19 @@ export async function getConnectedAccount() {
 }
 
 /**
- * Read a work item.
+ * Read ProofWork state.
  */
 export async function getWork(
   workId: string,
 ): Promise<ProofWorkResult> {
   const result =
     await readClient().readContract({
-      address: CONTRACT_ADDRESS,
-      functionName: "get_work",
+      address:
+        CONTRACT_ADDRESS,
+
+      functionName:
+        "get_work",
+
       args: [workId],
     });
 
@@ -353,7 +414,7 @@ type WriteFunction =
   | "verify_work";
 
 /**
- * Send a write transaction.
+ * Write to ProofWork.
  */
 export async function sendWrite(
   client: ReturnType<
@@ -363,36 +424,58 @@ export async function sendWrite(
   args: string[],
 ) {
   const write = {
-    address: CONTRACT_ADDRESS,
+    address:
+      CONTRACT_ADDRESS,
+
     functionName,
+
     args,
   } as const;
 
+  /*
+   * GenLayer requires the fee information
+   * before submitting the transaction.
+   */
   const estimate =
     await client.estimateTransactionFeesForWrite(
       write,
     );
 
+  /*
+   * Send the transaction through Rabby's
+   * EIP-1193 provider.
+   */
   const txHash =
     await client.writeContract({
       ...write,
+
       fees: {
         distribution:
           estimate.distribution,
+
         messageAllocations:
           estimate.messageAllocations,
+
         feeValue:
           estimate.feeValue,
       },
     });
 
+  /*
+   * Wait until GenLayer finalizes the
+   * consensus transaction.
+   */
   const receipt =
-    await client.waitForTransactionReceipt({
-      hash: txHash,
-      status:
-        TransactionStatus.FINALIZED,
-      fullTransaction: false,
-    });
+    await client.waitForTransactionReceipt(
+      {
+        hash: txHash,
+
+        status:
+          TransactionStatus.FINALIZED,
+
+        fullTransaction: false,
+      },
+    );
 
   return {
     txHash,
