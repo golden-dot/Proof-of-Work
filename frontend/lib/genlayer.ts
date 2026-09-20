@@ -1,35 +1,23 @@
 import { createClient } from "genlayer-js";
-import { testnetAsimov } from "genlayer-js/chains";
+import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
 export const CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
     "") as `0x${string}`;
 
-export const TESTNET_CHAIN_ID = "0x107D";
-export const TESTNET_CHAIN_ID_DECIMAL = 4221;
+export const BRADBURY_CHAIN_ID = "0x107D";
+export const BRADBURY_CHAIN_ID_DECIMAL = 4221;
 
-/*
- * GenLayer Testnet Asimov
- *
- * Chain ID: 4221
- *
- * The actual GenLayer RPC configuration is provided
- * by the testnetAsimov GenLayerJS chain definition.
- */
-export const TESTNET_RPC =
-  "https://rpc-asimov.genlayer.com";
+export const BRADBURY_RPC =
+  "https://rpc-bradbury.genlayer.com";
 
 export type ProofWorkResult = {
   id: string;
   title: string;
   criteria: string;
   evidence_url: string;
-  status:
-    | "OPEN"
-    | "SUBMITTED"
-    | "VERIFIED"
-    | string;
+  status: "OPEN" | "SUBMITTED" | "VERIFIED" | string;
   score: number;
   approved: boolean;
   summary: string;
@@ -76,11 +64,7 @@ export async function getWalletChainId() {
   ).toLowerCase();
 }
 
-/**
- * Make sure the user's wallet is connected
- * to GenLayer Testnet Asimov.
- */
-export async function ensureTestnetNetwork(
+export async function ensureBradburyNetwork(
   provider = getWalletProvider(),
 ) {
   const currentChainId = String(
@@ -91,7 +75,7 @@ export async function ensureTestnetNetwork(
 
   if (
     currentChainId ===
-    TESTNET_CHAIN_ID.toLowerCase()
+    BRADBURY_CHAIN_ID.toLowerCase()
   ) {
     return;
   }
@@ -101,7 +85,7 @@ export async function ensureTestnetNetwork(
       method: "wallet_switchEthereumChain",
       params: [
         {
-          chainId: TESTNET_CHAIN_ID,
+          chainId: BRADBURY_CHAIN_ID,
         },
       ],
     });
@@ -115,13 +99,9 @@ export async function ensureTestnetNetwork(
           )
         : undefined;
 
-    /*
-     * 4902 means the network is not yet
-     * registered in the wallet.
-     */
     if (code !== 4902) {
       throw new Error(
-        "Please switch your wallet to GenLayer Testnet Asimov (chain 4221) and try again.",
+        "Please switch your wallet to GenLayer Testnet Bradbury (chain 4221) and try again.",
       );
     }
 
@@ -129,14 +109,17 @@ export async function ensureTestnetNetwork(
       method: "wallet_addEthereumChain",
       params: [
         {
-          chainId: TESTNET_CHAIN_ID,
-          chainName: "GenLayer Testnet Asimov",
+          chainId: BRADBURY_CHAIN_ID,
+          chainName: "GenLayer Testnet Bradbury",
           nativeCurrency: {
             name: "GEN",
             symbol: "GEN",
             decimals: 18,
           },
-          rpcUrls: [TESTNET_RPC],
+          rpcUrls: [BRADBURY_RPC],
+          blockExplorerUrls: [
+            "https://explorer-bradbury.genlayer.com",
+          ],
         },
       ],
     });
@@ -150,43 +133,34 @@ export async function ensureTestnetNetwork(
 
   if (
     verifiedChainId !==
-    TESTNET_CHAIN_ID.toLowerCase()
+    BRADBURY_CHAIN_ID.toLowerCase()
   ) {
     throw new Error(
-      "Wallet network did not switch to GenLayer Testnet Asimov (chain 4221).",
+      "Wallet network did not switch to GenLayer Testnet Bradbury (chain 4221).",
     );
   }
 }
 
-/**
- * Read-only GenLayer client.
- */
 export function readClient() {
   return createClient({
-    chain: testnetAsimov,
+    chain: testnetBradbury,
   });
 }
 
-/**
- * Wallet-backed GenLayer client.
- */
 export function walletClient(
   address: `0x${string}`,
 ) {
   return createClient({
-    chain: testnetAsimov,
+    chain: testnetBradbury,
     account: address,
     provider: getWalletProvider(),
   });
 }
 
-/**
- * Explicitly connect a wallet.
- */
 export async function connectWallet() {
   const provider = getWalletProvider();
 
-  await ensureTestnetNetwork(provider);
+  await ensureBradburyNetwork(provider);
 
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
@@ -197,14 +171,12 @@ export async function connectWallet() {
     | undefined;
 
   if (!address) {
-    throw new Error(
-      "No wallet account returned.",
-    );
+    throw new Error("No wallet account returned.");
   }
 
   const client = walletClient(address);
 
-  await client.connect("testnetAsimov");
+  await client.connect("testnetBradbury");
 
   return {
     address,
@@ -213,11 +185,6 @@ export async function connectWallet() {
   };
 }
 
-/**
- * Restore an already-authorized wallet silently.
- *
- * This does not open a wallet popup.
- */
 export async function restoreWallet() {
   const provider = getWalletProvider();
 
@@ -241,14 +208,14 @@ export async function restoreWallet() {
 
   if (
     chainId !==
-    TESTNET_CHAIN_ID.toLowerCase()
+    BRADBURY_CHAIN_ID.toLowerCase()
   ) {
     return null;
   }
 
   const client = walletClient(address);
 
-  await client.connect("testnetAsimov");
+  await client.connect("testnetBradbury");
 
   return {
     address,
@@ -257,14 +224,10 @@ export async function restoreWallet() {
   };
 }
 
-/**
- * Open the wallet account selector and
- * connect the selected account.
- */
 export async function changeWallet() {
   const provider = getWalletProvider();
 
-  await ensureTestnetNetwork(provider);
+  await ensureBradburyNetwork(provider);
 
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
@@ -275,14 +238,12 @@ export async function changeWallet() {
     | undefined;
 
   if (!address) {
-    throw new Error(
-      "No wallet account selected.",
-    );
+    throw new Error("No wallet account selected.");
   }
 
   const client = walletClient(address);
 
-  await client.connect("testnetAsimov");
+  await client.connect("testnetBradbury");
 
   return {
     address,
@@ -297,15 +258,11 @@ export async function getConnectedAccount() {
   })) as string[];
 
   return (
-    (accounts[0] as
-      | `0x${string}`
-      | undefined) ?? null
+    (accounts[0] as `0x${string}` | undefined) ??
+    null
   );
 }
 
-/**
- * Read a ProofWork record.
- */
 export async function getWork(
   workId: string,
 ): Promise<ProofWorkResult> {
@@ -329,9 +286,6 @@ type WriteFunction =
   | "submit_evidence"
   | "verify_work";
 
-/**
- * Send a transaction to the ProofWork contract.
- */
 export async function sendWrite(
   client: ReturnType<typeof walletClient>,
   functionName: WriteFunction,
@@ -350,19 +304,15 @@ export async function sendWrite(
   } as const;
 
   const estimate =
-    await client.estimateTransactionFeesForWrite(
-      write,
-    );
+    await client.estimateTransactionFeesForWrite(write);
 
   const txHash = await client.writeContract({
     ...write,
     fees: {
-      distribution:
-        estimate.distribution,
+      distribution: estimate.distribution,
       messageAllocations:
         estimate.messageAllocations,
-      feeValue:
-        estimate.feeValue,
+      feeValue: estimate.feeValue,
     },
   });
 
