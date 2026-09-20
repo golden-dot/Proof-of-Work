@@ -22,40 +22,79 @@ export type ProofWorkResult = {
 };
 
 type Eip1193Provider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  on?: (event: string, listener: (...args: unknown[]) => void) => void;
-  removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
+  request: (args: {
+    method: string;
+    params?: unknown[];
+  }) => Promise<unknown>;
+
+  on?: (
+    event: string,
+    listener: (...args: unknown[]) => void,
+  ) => void;
+
+  removeListener?: (
+    event: string,
+    listener: (...args: unknown[]) => void,
+  ) => void;
 };
 
 export function getWalletProvider(): Eip1193Provider {
-  const provider = (window as Window & { ethereum?: Eip1193Provider }).ethereum;
+  const provider = (
+    window as Window & {
+      ethereum?: Eip1193Provider;
+    }
+  ).ethereum;
+
   if (!provider) {
-    throw new Error("No browser wallet detected. Install MetaMask or another EIP-1193 wallet.");
+    throw new Error(
+      "No browser wallet detected. Install MetaMask or another EIP-1193 wallet.",
+    );
   }
+
   return provider;
 }
 
 export async function getWalletChainId() {
   return String(
-    await getWalletProvider().request({ method: "eth_chainId" }),
+    await getWalletProvider().request({
+      method: "eth_chainId",
+    }),
   ).toLowerCase();
 }
 
-export async function ensureStudioDevNetwork(provider = getWalletProvider()) {
-  const current = String(await provider.request({ method: "eth_chainId" })).toLowerCase();
-  if (current === STUDIO_DEV_CHAIN_ID.toLowerCase()) return;
+export async function ensureStudioDevNetwork(
+  provider = getWalletProvider(),
+) {
+  const currentChainId = String(
+    await provider.request({
+      method: "eth_chainId",
+    }),
+  ).toLowerCase();
+
+  if (currentChainId === STUDIO_DEV_CHAIN_ID.toLowerCase()) {
+    return;
+  }
 
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: STUDIO_DEV_CHAIN_ID }],
+      params: [
+        {
+          chainId: STUDIO_DEV_CHAIN_ID,
+        },
+      ],
     });
   } catch (error: unknown) {
     const code =
-      typeof error === "object" && error !== null && "code" in error
-        ? Number((error as { code?: unknown }).code)
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error
+        ? Number(
+            (error as { code?: unknown }).code,
+          )
         : undefined;
 
+    // 4902 = network isn't added to wallet yet
     if (code !== 4902) {
       throw new Error(
         "Please switch your wallet to GenLayer Studio Dev (chain 61997) and try again.",
@@ -64,29 +103,45 @@ export async function ensureStudioDevNetwork(provider = getWalletProvider()) {
 
     await provider.request({
       method: "wallet_addEthereumChain",
-      params: [{
-        chainId: STUDIO_DEV_CHAIN_ID,
-        chainName: "GenLayer Studio Dev",
-        nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-        rpcUrls: [STUDIO_DEV_RPC],
-      }],
+      params: [
+        {
+          chainId: STUDIO_DEV_CHAIN_ID,
+          chainName: "GenLayer Studio Dev",
+          nativeCurrency: {
+            name: "GEN",
+            symbol: "GEN",
+            decimals: 18,
+          },
+          rpcUrls: [STUDIO_DEV_RPC],
+        },
+      ],
     });
   }
 
-  const verified = String(
-    await provider.request({ method: "eth_chainId" }),
+  const verifiedChainId = String(
+    await provider.request({
+      method: "eth_chainId",
+    }),
   ).toLowerCase();
 
-  if (verified !== STUDIO_DEV_CHAIN_ID.toLowerCase()) {
-    throw new Error("Wallet network did not switch to GenLayer Studio Dev (chain 61997).");
+  if (
+    verifiedChainId !== STUDIO_DEV_CHAIN_ID.toLowerCase()
+  ) {
+    throw new Error(
+      "Wallet network did not switch to GenLayer Studio Dev (chain 61997).",
+    );
   }
 }
 
 export function readClient() {
-  return createClient({ chain: studioDevnet });
+  return createClient({
+    chain: studioDevnet,
+  });
 }
 
-export function walletClient(address: `0x${string}`) {
+export function walletClient(
+  address: `0x${string}`,
+) {
   return createClient({
     chain: studioDevnet,
     account: address,
@@ -94,83 +149,176 @@ export function walletClient(address: `0x${string}`) {
   });
 }
 
+/**
+ * Explicitly connect a wallet.
+ * This may open the wallet permission/account selector.
+ */
 export async function connectWallet() {
   const provider = getWalletProvider();
+
   await ensureStudioDevNetwork(provider);
 
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
   })) as string[];
 
-  const address = accounts[0] as `0x${string}` | undefined;
-  if (!address) throw new Error("No wallet account returned.");
+  const address = accounts[0] as
+    | `0x${string}`
+    | undefined;
+
+  if (!address) {
+    throw new Error("No wallet account returned.");
+  }
 
   const client = walletClient(address);
+
   await client.connect("studioDevnet");
-  return { address, client, provider };
+
+  return {
+    address,
+    client,
+    provider,
+  };
 }
 
-/** Restore an already-authorized wallet without opening a new permission prompt. */
+/**
+ * Restore an already-authorized wallet silently.
+ * This does NOT open a wallet permission popup.
+ */
 export async function restoreWallet() {
   const provider = getWalletProvider();
+
   const accounts = (await provider.request({
     method: "eth_accounts",
   })) as string[];
 
-  const address = accounts[0] as `0x${string}` | undefined;
-  if (!address) return null;
+  const address = accounts[0] as
+    | `0x${string}`
+    | undefined;
+
+  if (!address) {
+    return null;
+  }
 
   const chainId = String(
-    await provider.request({ method: "eth_chainId" }),
+    await provider.request({
+      method: "eth_chainId",
+    }),
   ).toLowerCase();
 
-  if (chainId !== STUDIO_DEV_CHAIN_ID.toLowerCase()) return null;
+  if (
+    chainId !== STUDIO_DEV_CHAIN_ID.toLowerCase()
+  ) {
+    return null;
+  }
 
   const client = walletClient(address);
+
   await client.connect("studioDevnet");
-  return { address, client, provider };
+
+  return {
+    address,
+    client,
+    provider,
+  };
+}
+
+/**
+ * Opens the wallet account picker and connects
+ * the selected account without requiring another
+ * frontend connection flow.
+ */
+export async function changeWallet() {
+  const provider = getWalletProvider();
+
+  await ensureStudioDevNetwork(provider);
+
+  const accounts = (await provider.request({
+    method: "eth_requestAccounts",
+  })) as string[];
+
+  const address = accounts[0] as
+    | `0x${string}`
+    | undefined;
+
+  if (!address) {
+    throw new Error("No wallet account selected.");
+  }
+
+  const client = walletClient(address);
+
+  await client.connect("studioDevnet");
+
+  return {
+    address,
+    client,
+    provider,
+  };
 }
 
 export async function getConnectedAccount() {
   const accounts = (await getWalletProvider().request({
     method: "eth_accounts",
   })) as string[];
-  return (accounts[0] as `0x${string}` | undefined) ?? null;
+
+  return (
+    (accounts[0] as `0x${string}` | undefined) ??
+    null
+  );
 }
 
-export async function getWork(workId: string): Promise<ProofWorkResult> {
+export async function getWork(
+  workId: string,
+): Promise<ProofWorkResult> {
   const result = await readClient().readContract({
     address: CONTRACT_ADDRESS,
     functionName: "get_work",
     args: [workId],
   });
+
   return result as ProofWorkResult;
 }
 
-type WriteFunction = "create_work" | "submit_evidence" | "verify_work";
+type WriteFunction =
+  | "create_work"
+  | "submit_evidence"
+  | "verify_work";
 
 export async function sendWrite(
   client: ReturnType<typeof walletClient>,
   functionName: WriteFunction,
   args: string[],
 ) {
-  const write = { address: CONTRACT_ADDRESS, functionName, args } as const;
-  const estimate = await client.estimateTransactionFeesForWrite(write);
+  const write = {
+    address: CONTRACT_ADDRESS,
+    functionName,
+    args,
+  } as const;
+
+  const estimate =
+    await client.estimateTransactionFeesForWrite(
+      write,
+    );
 
   const txHash = await client.writeContract({
     ...write,
     fees: {
       distribution: estimate.distribution,
-      messageAllocations: estimate.messageAllocations,
+      messageAllocations:
+        estimate.messageAllocations,
       feeValue: estimate.feeValue,
     },
   });
 
-  const receipt = await client.waitForTransactionReceipt({
-    hash: txHash,
-    status: TransactionStatus.FINALIZED,
-    fullTransaction: false,
-  });
+  const receipt =
+    await client.waitForTransactionReceipt({
+      hash: txHash,
+      status: TransactionStatus.FINALIZED,
+      fullTransaction: false,
+    });
 
-  return { txHash, receipt };
+  return {
+    txHash,
+    receipt,
+  };
 }
