@@ -1,0 +1,12 @@
+{
+  "name": "proofwork",
+  "private": true,
+  "type": "module",
+  "workspaces": ["frontend"],
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "lint": "cd frontend && npm run lint",
+    "deploy": "genlayer deploy"
+  }
+}
