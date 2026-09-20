@@ -20,35 +20,23 @@ import {
   type ProofWorkResult,
 } from "@/lib/genlayer";
 
-function shortAddress(
-  address: string,
-) {
+function shortAddress(address: string) {
   if (!address) {
     return "";
   }
 
-  return `${address.slice(
-    0,
-    6,
-  )}…${address.slice(-4)}`;
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function shortHash(
-  hash: string,
-) {
+function shortHash(hash: string) {
   if (!hash) {
     return "";
   }
 
-  return `${hash.slice(
-    0,
-    10,
-  )}…${hash.slice(-8)}`;
+  return `${hash.slice(0, 10)}…${hash.slice(-8)}`;
 }
 
-function errorMessage(
-  error: unknown,
-) {
+function errorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
   }
@@ -57,23 +45,18 @@ function errorMessage(
 }
 
 export default function Home() {
-  const [wallet, setWallet] =
-    useState("");
+  const [wallet, setWallet] = useState("");
 
-  const [client, setClient] =
-    useState<
-      Awaited<
-        ReturnType<
-          typeof connectWallet
-        >
-      >["client"] | null
-    >(null);
+  const [client, setClient] = useState<
+    Awaited<
+      ReturnType<typeof connectWallet>
+    >["client"] | null
+  >(null);
 
   const [networkReady, setNetworkReady] =
     useState(false);
 
-  const [busy, setBusy] =
-    useState(false);
+  const [busy, setBusy] = useState(false);
 
   const [walletAction, setWalletAction] =
     useState<
@@ -84,28 +67,20 @@ export default function Home() {
       | null
     >(null);
 
-  const [workId, setWorkId] =
-    useState("demo-001");
+  // Empty by default.
+  const [workId, setWorkId] = useState("");
 
-  const [title, setTitle] =
-    useState(
-      "Landing page delivery",
-    );
+  const [title, setTitle] = useState("");
 
   const [criteria, setCriteria] =
-    useState(
-      "The evidence must show a responsive page, a clear headline, and working navigation.",
-    );
+    useState("");
 
   const [evidence, setEvidence] =
-    useState(
-      "https://example.com",
-    );
+    useState("");
 
-  const [status, setStatus] =
-    useState(
-      "Connect your wallet to begin.",
-    );
+  const [status, setStatus] = useState(
+    "Connect your wallet to begin.",
+  );
 
   const [result, setResult] =
     useState<ProofWorkResult | null>(
@@ -116,20 +91,29 @@ export default function Home() {
     useState("");
 
   async function refresh() {
-    const id =
-      workId.trim();
+    const id = workId.trim();
 
     if (!id) {
+      setStatus(
+        "Enter a Work ID to load a work request.",
+      );
       return;
     }
 
     try {
-      const work =
-        await getWork(id);
+      const work = await getWork(id);
 
       setResult(work);
-    } catch {
+
+      setStatus(
+        "Work request loaded.",
+      );
+    } catch (error) {
       setResult(null);
+
+      setStatus(
+        errorMessage(error),
+      );
     }
   }
 
@@ -209,13 +193,18 @@ export default function Home() {
     }
   }
 
+  /**
+   * Disconnect ProofWork's frontend session.
+   *
+   * This clears the active wallet/client from
+   * the app. It does not revoke the browser
+   * wallet's permission for the site.
+   */
   function disconnect() {
-    setWalletAction(
-      "disconnect",
-    );
+    setWalletAction("disconnect");
 
     setStatus(
-      "Disconnecting ProofWork wallet session…",
+      "Disconnecting wallet…",
     );
 
     window.setTimeout(() => {
@@ -243,6 +232,24 @@ export default function Home() {
       );
 
       await ensureBradburyNetwork();
+
+      /*
+       * Network switching alone does not create
+       * the GenLayerJS wallet client, so reconnect
+       * after the switch when an account exists.
+       */
+      if (wallet) {
+        const connected =
+          await connectWallet();
+
+        setWallet(
+          connected.address,
+        );
+
+        setClient(
+          connected.client,
+        );
+      }
 
       setNetworkReady(true);
 
@@ -338,7 +345,7 @@ export default function Home() {
       setStatus(
         `Wallet changed to ${shortAddress(
           address,
-        )}. Click Connect wallet to continue.`,
+        )}.`,
       );
     };
 
@@ -401,10 +408,7 @@ export default function Home() {
   }, []);
 
   async function create() {
-    if (
-      !client ||
-      !networkReady
-    ) {
+    if (!client || !networkReady) {
       setStatus(
         "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
@@ -412,33 +416,34 @@ export default function Home() {
       return;
     }
 
-    const id =
-      workId.trim();
-
-    const workTitle =
-      title.trim();
-
-    const workCriteria =
-      criteria.trim();
-
-    if (
-      !id ||
-      !workTitle ||
-      !workCriteria
-    ) {
+    if (!workId.trim()) {
       setStatus(
-        "Work ID, title, and acceptance criteria are required.",
+        "Please enter a Work ID.",
+      );
+
+      return;
+    }
+
+    if (!title.trim()) {
+      setStatus(
+        "Please enter a title.",
+      );
+
+      return;
+    }
+
+    if (!criteria.trim()) {
+      setStatus(
+        "Please enter the acceptance criteria.",
       );
 
       return;
     }
 
     setBusy(true);
-
     setStatus(
       "Creating work request on GenLayer…",
     );
-
     setTxHash("");
 
     try {
@@ -447,9 +452,9 @@ export default function Home() {
           client,
           "create_work",
           [
-            id,
-            workTitle,
-            workCriteria,
+            workId.trim(),
+            title.trim(),
+            criteria.trim(),
           ],
         );
 
@@ -458,7 +463,7 @@ export default function Home() {
       );
 
       setStatus(
-        "Work request finalized.",
+        "Work request finalized successfully.",
       );
 
       await refresh();
@@ -472,10 +477,7 @@ export default function Home() {
   }
 
   async function submit() {
-    if (
-      !client ||
-      !networkReady
-    ) {
+    if (!client || !networkReady) {
       setStatus(
         "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
@@ -483,13 +485,26 @@ export default function Home() {
       return;
     }
 
-    const url =
-      evidence.trim();
+    if (!workId.trim()) {
+      setStatus(
+        "Please enter a Work ID.",
+      );
+
+      return;
+    }
+
+    if (!evidence.trim()) {
+      setStatus(
+        "Please enter an evidence URL.",
+      );
+
+      return;
+    }
 
     if (
-      !url.startsWith(
-        "https://",
-      )
+      !evidence
+        .trim()
+        .startsWith("https://")
     ) {
       setStatus(
         "Evidence URL must start with https://",
@@ -499,11 +514,9 @@ export default function Home() {
     }
 
     setBusy(true);
-
     setStatus(
       "Submitting evidence…",
     );
-
     setTxHash("");
 
     try {
@@ -513,7 +526,7 @@ export default function Home() {
           "submit_evidence",
           [
             workId.trim(),
-            url,
+            evidence.trim(),
           ],
         );
 
@@ -536,10 +549,7 @@ export default function Home() {
   }
 
   async function verify() {
-    if (
-      !client ||
-      !networkReady
-    ) {
+    if (!client || !networkReady) {
       setStatus(
         "Connect your wallet to GenLayer Testnet Bradbury first.",
       );
@@ -549,18 +559,16 @@ export default function Home() {
 
     if (!workId.trim()) {
       setStatus(
-        "Enter a Work ID before verification.",
+        "Please enter a Work ID.",
       );
 
       return;
     }
 
     setBusy(true);
-
     setStatus(
       "GenLayer is evaluating the evidence and reaching validator consensus…",
     );
-
     setTxHash("");
 
     try {
@@ -588,6 +596,9 @@ export default function Home() {
       setBusy(false);
     }
   }
+
+  const hasWallet =
+    Boolean(wallet);
 
   const connected =
     Boolean(
@@ -621,59 +632,21 @@ export default function Home() {
             {BRADBURY_CHAIN_ID_DECIMAL}
           </span>
 
-          {!connected ? (
-            <div className="wallet-controls">
-              {wallet &&
-                !networkReady && (
-                  <span className="wallet-warning">
-                    Wrong network
-                  </span>
-                )}
-
-              <button
-                className={`wallet-button ${
-                  busy
-                    ? "is-loading"
-                    : ""
-                }`}
-                onClick={
-                  wallet &&
-                  !networkReady
-                    ? switchNetwork
-                    : connect
-                }
-                disabled={busy}
-              >
-                {busy ? (
-                  <>
-                    <span className="spinner" />
-
-                    {walletAction ===
-                    "switch"
-                      ? "Switching…"
-                      : "Connecting…"}
-                  </>
-                ) : (
-                  <>
-                    <span className="wallet-icon">
-                      ◈
-                    </span>
-
-                    {wallet &&
-                    !networkReady
-                      ? "Switch network"
-                      : "Connect wallet"}
-                  </>
-                )}
-              </button>
-            </div>
-          ) : (
+          {hasWallet ? (
             <div className="connected-wallet">
-              <span className="connected-pill">
+              <span
+                className={`connected-pill ${
+                  connected
+                    ? ""
+                    : "wallet-detected"
+                }`}
+              >
                 <span className="pulse-dot" />
 
                 <span>
-                  Connected
+                  {connected
+                    ? "Connected"
+                    : "Wallet detected"}
                 </span>
 
                 <span className="wallet-address">
@@ -682,6 +655,26 @@ export default function Home() {
                   )}
                 </span>
               </span>
+
+              {!networkReady && (
+                <button
+                  className="wallet-action"
+                  onClick={
+                    switchNetwork
+                  }
+                  disabled={busy}
+                >
+                  {walletAction ===
+                  "switch" ? (
+                    <>
+                      <span className="spinner small-spinner" />
+                      Switching…
+                    </>
+                  ) : (
+                    "Switch network"
+                  )}
+                </button>
+              )}
 
               <button
                 className="wallet-action"
@@ -704,7 +697,10 @@ export default function Home() {
               <button
                 className="disconnect-button"
                 onClick={disconnect}
-                disabled={busy}
+                disabled={
+                  walletAction ===
+                  "disconnect"
+                }
               >
                 {walletAction ===
                 "disconnect" ? (
@@ -713,10 +709,35 @@ export default function Home() {
                     Disconnecting…
                   </>
                 ) : (
-                  "Disconnect"
+                  "Disconnect wallet"
                 )}
               </button>
             </div>
+          ) : (
+            <button
+              className={`wallet-button ${
+                busy
+                  ? "is-loading"
+                  : ""
+              }`}
+              onClick={connect}
+              disabled={busy}
+            >
+              {busy ? (
+                <>
+                  <span className="spinner" />
+                  Connecting…
+                </>
+              ) : (
+                <>
+                  <span className="wallet-icon">
+                    ◈
+                  </span>
+
+                  Connect wallet
+                </>
+              )}
+            </button>
           )}
         </div>
       </nav>
@@ -767,7 +788,7 @@ export default function Home() {
               )
             }
             maxLength={80}
-            placeholder="demo-001"
+            placeholder="Enter a unique work ID"
           />
 
           <label>
@@ -782,7 +803,7 @@ export default function Home() {
               )
             }
             maxLength={200}
-            placeholder="Describe the work"
+            placeholder="Enter the work title"
           />
 
           <label>
@@ -797,7 +818,7 @@ export default function Home() {
               )
             }
             maxLength={4000}
-            placeholder="What must the evidence prove?"
+            placeholder="Describe exactly what the evidence must prove"
           />
 
           <button
@@ -833,15 +854,13 @@ export default function Home() {
               )
             }
             maxLength={1000}
-            placeholder="https://..."
+            placeholder="https://your-public-evidence-url.com"
           />
 
           <p className="small">
-            Use public HTTPS evidence
-            such as a deployed website,
-            GitHub page, documentation,
-            or another publicly readable
-            artifact.
+            Submit a public HTTPS page
+            containing evidence of the
+            completed work.
           </p>
 
           <button
