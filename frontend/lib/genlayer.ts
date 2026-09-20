@@ -6,6 +6,11 @@ export const CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
     "0x4F0b22649e8503886761E87Aafe86869b4E444c5") as `0x${string}`;
 
+// 61997 in hexadecimal. This is GenLayer Studio Dev.
+export const STUDIO_DEV_CHAIN_ID = "0xF1CD";
+export const STUDIO_DEV_CHAIN_ID_DECIMAL = 61997;
+export const STUDIO_DEV_RPC = "https://studio-dev.genlayer.com/api";
+
 export type ProofWorkResult = {
   id: string;
   title: string;
@@ -17,47 +22,127 @@ export type ProofWorkResult = {
   summary: string;
 };
 
+type Eip1193Provider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (event: string, listener: (...args: unknown[]) => void) => void;
+  removeListener?: (
+    event: string,
+    listener: (...args: unknown[]) => void,
+  ) => void;
+};
+
+export function getWalletProvider(): Eip1193Provider {
+  const provider = (window as Window & { ethereum?: Eip1193Provider }).ethereum;
+
+  if (!provider) {
+    throw new Error(
+      "No browser wallet detected. Install MetaMask or another EIP-1193 wallet.",
+    );
+  }
+
+  return provider;
+}
+
+export async function getWalletChainId() {
+  const provider = getWalletProvider();
+  return String(await provider.request({ method: "eth_chainId" })).toLowerCase();
+}
+
+export async function ensureStudioDevNetwork(provider = getWalletProvider()) {
+  const currentChainId = String(
+    await provider.request({ method: "eth_chainId" }),
+  ).toLowerCase();
+
+  if (currentChainId === STUDIO_DEV_CHAIN_ID.toLowerCase()) {
+    return;
+  }
+
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: STUDIO_DEV_CHAIN_ID }],
+    });
+  } catch (error: unknown) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? Number((error as { code?: unknown }).code)
+        : undefined;
+
+    // 4902 = the wallet does not know this chain yet.
+    if (code !== 4902) {
+      throw new Error(
+        "Please switch your wallet to GenLayer Studio Dev (chain 61997) and try again.",
+      );
+    }
+
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [
+        {
+          chainId: STUDIO_DEV_CHAIN_ID,
+          chainName: "GenLayer Studio Dev",
+          nativeCurrency: {
+            name: "GEN",
+            symbol: "GEN",
+            decimals: 18,
+          },
+          rpcUrls: [STUDIO_DEV_RPC],
+        },
+      ],
+    });
+  }
+
+  const verifiedChainId = String(
+    await provider.request({ method: "eth_chainId" }),
+  ).toLowerCase();
+
+  if (verifiedChainId !== STUDIO_DEV_CHAIN_ID.toLowerCase()) {
+    throw new Error(
+      "Wallet network did not switch to GenLayer Studio Dev (chain 61997).",
+    );
+  }
+}
+
 export function readClient() {
   return createClient({ chain: studioDevnet });
 }
 
 export function walletClient(address: `0x${string}`) {
-  const provider = (window as Window & { ethereum?: unknown }).ethereum;
-  if (!provider) {
-    throw new Error("Install a browser wallet such as MetaMask first.");
-  }
-
   return createClient({
     chain: studioDevnet,
     account: address,
-    provider,
+    provider: getWalletProvider(),
   });
 }
 
 export async function connectWallet() {
-  const provider = (window as Window & {
-    ethereum?: {
-      request: (args: { method: string }) => Promise<unknown>;
-    };
-  }).ethereum;
+  const provider = getWalletProvider();
 
-  if (!provider) {
-    throw new Error("No EIP-1193 wallet found.");
-  }
+  // Switch before requesting the account so the wallet and GenLayerJS
+  // are guaranteed to operate on the same network.
+  await ensureStudioDevNetwork(provider);
 
   const accounts = (await provider.request({
     method: "eth_requestAccounts",
   })) as string[];
 
-  if (!accounts[0]) {
+  const address = accounts[0] as `0x${string}` | undefined;
+  if (!address) {
     throw new Error("No wallet account returned.");
   }
 
-  const address = accounts[0] as `0x${string}`;
   const client = walletClient(address);
   await client.connect("studioDevnet");
 
-  return { address, client };
+  return { address, client, provider };
+}
+
+export async function getConnectedAccount() {
+  const provider = getWalletProvider();
+  const accounts = (await provider.request({
+    method: "eth_accounts",
+  })) as string[];
+  return (accounts[0] as `0x${string}` | undefined) ?? null;
 }
 
 export async function getWork(workId: string): Promise<ProofWorkResult> {
