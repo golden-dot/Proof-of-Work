@@ -1,3 +1,4 @@
+```tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,7 +19,7 @@ type WalletClient =
   Awaited<ReturnType<typeof connectWallet>>["client"];
 
 /* ============================================================
-   Helpers
+   HELPERS
    ============================================================ */
 
 function shortAddress(address: string): string {
@@ -80,35 +81,44 @@ function errorMessage(error: unknown): string {
     const parts: string[] = [];
 
     if (details.shortMessage) {
-      parts.push(String(details.shortMessage));
+      parts.push(
+        String(details.shortMessage),
+      );
     } else {
       parts.push(details.message);
     }
 
     if (details.code !== undefined) {
       parts.push(
-        "Code: " + String(details.code),
+        "Code: " +
+          String(details.code),
       );
     }
 
     if (details.details !== undefined) {
       parts.push(
         "Details: " +
-          formatErrorValue(details.details),
+          formatErrorValue(
+            details.details,
+          ),
       );
     }
 
     if (details.data !== undefined) {
       parts.push(
         "Data: " +
-          formatErrorValue(details.data),
+          formatErrorValue(
+            details.data,
+          ),
       );
     }
 
     if (details.cause !== undefined) {
       parts.push(
         "Cause: " +
-          formatErrorValue(details.cause),
+          formatErrorValue(
+            details.cause,
+          ),
       );
     }
 
@@ -119,18 +129,21 @@ function errorMessage(error: unknown): string {
 }
 
 /* ============================================================
-   Page
+   PAGE
    ============================================================ */
 
 export default function Home() {
   /* ==========================================================
-     Wallet state
+     WALLET STATE
      ========================================================== */
 
-  const [wallet, setWallet] = useState("");
+  const [wallet, setWallet] =
+    useState("");
 
   const [client, setClient] =
-    useState<WalletClient | null>(null);
+    useState<WalletClient | null>(
+      null,
+    );
 
   const [walletDetected, setWalletDetected] =
     useState(false);
@@ -139,38 +152,79 @@ export default function Home() {
     useState(false);
 
   /* ==========================================================
-     Form state
+     FORM STATE
      ========================================================== */
 
-  const [workId, setWorkId] = useState("");
+  const [workId, setWorkId] =
+    useState("");
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] =
+    useState("");
 
-  const [criteria, setCriteria] = useState("");
+  const [criteria, setCriteria] =
+    useState("");
 
-  const [evidence, setEvidence] = useState("");
+  const [evidence, setEvidence] =
+    useState("");
 
   /* ==========================================================
-     UI state
+     UI STATE
      ========================================================== */
 
-  const [status, setStatus] = useState(
-    "Connect your wallet to begin.",
-  );
+  const [status, setStatus] =
+    useState(
+      "Connect your wallet to begin.",
+    );
 
   const [result, setResult] =
-    useState<ProofWorkResult | null>(null);
+    useState<ProofWorkResult | null>(
+      null,
+    );
 
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] =
+    useState(false);
 
-  const [txHash, setTxHash] = useState("");
+  const [txHash, setTxHash] =
+    useState("");
 
   /* ==========================================================
-     Refresh work
+     CLIENT INITIALIZATION
+     ========================================================== */
+
+  async function getActiveClient(): Promise<WalletClient> {
+    if (client) {
+      return client;
+    }
+
+    const connected =
+      await connectWallet();
+
+    setWallet(
+      connected.address,
+    );
+
+    setClient(
+      connected.client,
+    );
+
+    setWalletDetected(
+      true,
+    );
+
+    setNetworkReady(
+      true,
+    );
+
+    return connected.client;
+  }
+
+  /* ==========================================================
+     REFRESH WORK
      ========================================================== */
 
   async function refresh() {
-    const id = workId.trim();
+    const id =
+      workId.trim();
 
     if (!id) {
       setResult(null);
@@ -178,7 +232,9 @@ export default function Home() {
     }
 
     try {
-      const value = await getWork(id);
+      const value =
+        await getWork(id);
+
       setResult(value);
     } catch (error) {
       console.error(
@@ -191,7 +247,7 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Connect wallet
+     CONNECT WALLET
      ========================================================== */
 
   async function connect() {
@@ -205,13 +261,21 @@ export default function Home() {
       const connected =
         await connectWallet();
 
-      setWallet(connected.address);
+      setWallet(
+        connected.address,
+      );
 
-      setClient(connected.client);
+      setClient(
+        connected.client,
+      );
 
-      setWalletDetected(true);
+      setWalletDetected(
+        true,
+      );
 
-      setNetworkReady(true);
+      setNetworkReady(
+        true,
+      );
 
       setStatus(
         "Wallet connected to GenLayer Bradbury Testnet.",
@@ -235,7 +299,7 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Change wallet
+     CHANGE WALLET
      ========================================================== */
 
   async function changeWallet() {
@@ -253,6 +317,7 @@ export default function Home() {
         await provider.request({
           method:
             "wallet_requestPermissions",
+
           params: [
             {
               eth_accounts: {},
@@ -272,18 +337,20 @@ export default function Home() {
             "eth_requestAccounts",
         });
 
-      const accounts = Array.isArray(
-        rawAccounts,
-      )
-        ? rawAccounts
-        : [];
+      const accounts =
+        Array.isArray(
+          rawAccounts,
+        )
+          ? rawAccounts
+          : [];
 
-      const address =
-        typeof accounts[0] === "string"
+      const selectedAddress =
+        typeof accounts[0] ===
+        "string"
           ? accounts[0]
           : "";
 
-      if (!address) {
+      if (!selectedAddress) {
         throw new Error(
           "No wallet account was selected.",
         );
@@ -292,13 +359,21 @@ export default function Home() {
       const connected =
         await connectWallet();
 
-      setWallet(connected.address);
+      setWallet(
+        connected.address,
+      );
 
-      setClient(connected.client);
+      setClient(
+        connected.client,
+      );
 
-      setWalletDetected(true);
+      setWalletDetected(
+        true,
+      );
 
-      setNetworkReady(true);
+      setNetworkReady(
+        true,
+      );
 
       setStatus(
         "Wallet changed to " +
@@ -323,7 +398,7 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Disconnect frontend session
+     DISCONNECT FRONTEND SESSION
      ========================================================== */
 
   function disconnectWallet() {
@@ -343,7 +418,7 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Switch network
+     SWITCH NETWORK
      ========================================================== */
 
   async function switchNetwork() {
@@ -368,7 +443,9 @@ export default function Home() {
         );
       }
 
-      setNetworkReady(true);
+      setNetworkReady(
+        true,
+      );
 
       setClient(null);
 
@@ -383,6 +460,8 @@ export default function Home() {
 
       setNetworkReady(false);
 
+      setClient(null);
+
       setStatus(
         "Network switch failed:\n" +
           errorMessage(error),
@@ -393,14 +472,16 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Detect wallet
+     WALLET DETECTION
      ========================================================== */
 
   useEffect(() => {
     let mounted = true;
 
     let provider:
-      | ReturnType<typeof getWalletProvider>
+      | ReturnType<
+          typeof getWalletProvider
+        >
       | null = null;
 
     try {
@@ -410,16 +491,23 @@ export default function Home() {
       provider = null;
     }
 
-    async function restoreWallet() {
+    async function detectWallet() {
       if (!provider) {
         if (!mounted) {
           return;
         }
 
-        setWalletDetected(false);
+        setWalletDetected(
+          false,
+        );
+
         setWallet("");
+
         setClient(null);
-        setNetworkReady(false);
+
+        setNetworkReady(
+          false,
+        );
 
         setStatus(
           "No browser wallet detected. Connect a wallet to begin.",
@@ -429,22 +517,22 @@ export default function Home() {
       }
 
       try {
-        setWalletDetected(true);
-
         const rawAccounts =
           await provider.request({
             method:
               "eth_accounts",
           });
 
-        const accounts = Array.isArray(
-          rawAccounts,
-        )
-          ? rawAccounts
-          : [];
+        const accounts =
+          Array.isArray(
+            rawAccounts,
+          )
+            ? rawAccounts
+            : [];
 
         const account =
-          typeof accounts[0] === "string"
+          typeof accounts[0] ===
+          "string"
             ? accounts[0]
             : "";
 
@@ -452,10 +540,18 @@ export default function Home() {
           return;
         }
 
+        setWalletDetected(
+          true,
+        );
+
         if (!account) {
           setWallet("");
+
           setClient(null);
-          setNetworkReady(false);
+
+          setNetworkReady(
+            false,
+          );
 
           setStatus(
             "Wallet detected. Connect your wallet to begin.",
@@ -486,7 +582,10 @@ export default function Home() {
           TESTNET_BRADBURY_CHAIN_ID.toLowerCase()
         ) {
           setClient(null);
-          setNetworkReady(false);
+
+          setNetworkReady(
+            false,
+          );
 
           setStatus(
             "Wallet detected, but it is on the wrong network. Switch to GenLayer Bradbury Testnet.",
@@ -495,18 +594,25 @@ export default function Home() {
           return;
         }
 
-        setNetworkReady(true);
+        /*
+         * Wallet is detected and on Bradbury.
+         * The actual GenLayer client is initialized
+         * lazily when an action is clicked.
+         */
+        setNetworkReady(
+          true,
+        );
 
         setClient(null);
 
         setStatus(
           "Wallet detected: " +
             shortAddress(account) +
-            ". Ready to connect.",
+            ". Ready to create a request.",
         );
       } catch (error) {
         console.error(
-          "Wallet restore error:",
+          "Wallet detection error:",
           error,
         );
 
@@ -514,9 +620,15 @@ export default function Home() {
           return;
         }
 
-        setWalletDetected(true);
+        setWalletDetected(
+          true,
+        );
+
         setClient(null);
-        setNetworkReady(false);
+
+        setNetworkReady(
+          false,
+        );
 
         setStatus(
           "Wallet detection failed:\n" +
@@ -538,16 +650,21 @@ export default function Home() {
           : [];
 
       const address =
-        typeof accounts[0] === "string"
+        typeof accounts[0] ===
+        "string"
           ? accounts[0]
           : "";
 
-      setWallet(address);
+      setWallet(
+        address,
+      );
 
       setClient(null);
 
       if (!address) {
-        setNetworkReady(false);
+        setNetworkReady(
+          false,
+        );
 
         setStatus(
           "Wallet account disconnected from the browser wallet.",
@@ -556,9 +673,13 @@ export default function Home() {
         return;
       }
 
-      setWalletDetected(true);
+      setWalletDetected(
+        true,
+      );
 
-      setNetworkReady(false);
+      setNetworkReady(
+        false,
+      );
 
       setStatus(
         "Wallet changed to " +
@@ -591,7 +712,7 @@ export default function Home() {
 
       if (correctNetwork) {
         setStatus(
-          "GenLayer Bradbury Testnet selected. Connect your wallet to continue.",
+          "GenLayer Bradbury Testnet selected. Your wallet is ready.",
         );
       } else {
         setStatus(
@@ -600,7 +721,7 @@ export default function Home() {
       }
     };
 
-    void restoreWallet();
+    void detectWallet();
 
     if (provider) {
       if (provider.on) {
@@ -636,7 +757,7 @@ export default function Home() {
   }, []);
 
   /* ==========================================================
-     Create request
+     CREATE REQUEST
      ========================================================== */
 
   async function create() {
@@ -647,9 +768,9 @@ export default function Home() {
       return;
     }
 
-    if (!client || !networkReady) {
+    if (!networkReady) {
       setStatus(
-        "Connect your wallet to GenLayer Bradbury Testnet first.",
+        "Switch your wallet to GenLayer Bradbury Testnet first.",
       );
       return;
     }
@@ -706,17 +827,26 @@ export default function Home() {
     }
 
     setBusy(true);
+
     setTxHash("");
+
     setResult(null);
 
     setStatus(
-      "Creating the work request on GenLayer…",
+      "Preparing the GenLayer transaction…",
     );
 
     try {
+      const activeClient =
+        await getActiveClient();
+
+      setStatus(
+        "Creating the work request on GenLayer…",
+      );
+
       const response =
         await sendWrite(
-          client,
+          activeClient,
           "create_work",
           [
             id,
@@ -750,7 +880,7 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Submit evidence
+     SUBMIT EVIDENCE
      ========================================================== */
 
   async function submit() {
@@ -761,9 +891,9 @@ export default function Home() {
       return;
     }
 
-    if (!client || !networkReady) {
+    if (!networkReady) {
       setStatus(
-        "Connect your wallet to GenLayer Bradbury Testnet first.",
+        "Switch your wallet to GenLayer Bradbury Testnet first.",
       );
       return;
     }
@@ -807,16 +937,24 @@ export default function Home() {
     }
 
     setBusy(true);
+
     setTxHash("");
 
     setStatus(
-      "Submitting evidence to the ProofWork contract…",
+      "Preparing the GenLayer transaction…",
     );
 
     try {
+      const activeClient =
+        await getActiveClient();
+
+      setStatus(
+        "Submitting evidence to the ProofWork contract…",
+      );
+
       const response =
         await sendWrite(
-          client,
+          activeClient,
           "submit_evidence",
           [
             id,
@@ -849,7 +987,7 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Verify
+     VERIFY
      ========================================================== */
 
   async function verify() {
@@ -860,9 +998,9 @@ export default function Home() {
       return;
     }
 
-    if (!client || !networkReady) {
+    if (!networkReady) {
       setStatus(
-        "Connect your wallet to GenLayer Bradbury Testnet first.",
+        "Switch your wallet to GenLayer Bradbury Testnet first.",
       );
       return;
     }
@@ -878,17 +1016,26 @@ export default function Home() {
     }
 
     setBusy(true);
+
     setTxHash("");
+
     setResult(null);
 
     setStatus(
-      "GenLayer is evaluating the evidence and reaching validator consensus…",
+      "Preparing GenLayer verification…",
     );
 
     try {
+      const activeClient =
+        await getActiveClient();
+
+      setStatus(
+        "GenLayer is evaluating the evidence and reaching validator consensus…",
+      );
+
       const response =
         await sendWrite(
-          client,
+          activeClient,
           "verify_work",
           [id],
         );
@@ -920,16 +1067,15 @@ export default function Home() {
   }
 
   /* ==========================================================
-     Connected state
+     CONNECTED STATE
      ========================================================== */
 
   const connected =
     Boolean(wallet) &&
-    Boolean(client) &&
     networkReady;
 
   /* ==========================================================
-     Render
+     RENDER
      ========================================================== */
 
   return (
@@ -1341,3 +1487,28 @@ export default function Home() {
     </main>
   );
 }
+```
+
+After replacing it, run:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+Then start it:
+
+```bash
+npm run dev
+```
+
+For the first test, use:
+
+```text
+Work ID: test-example-001
+Title: Verify Example Domain
+Evidence: https://example.com
+```
+
+The **Create request** button should now become active as soon as your wallet is detected and it is on Bradbury, even before the GenLayer client has been initialized. Clicking it initializes the client automatically.
