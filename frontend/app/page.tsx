@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   connectWallet,
-  getConnectedAccount,
+  restoreWallet,
   getWalletProvider,
   getWalletChainId,
   ensureStudioDevNetwork,
@@ -38,9 +38,9 @@ export default function Home() {
   const [txHash, setTxHash] = useState("");
 
   async function refresh() {
+    if (!workId.trim()) return;
     try {
-      const value = await getWork(workId.trim());
-      setResult(value);
+      setResult(await getWork(workId.trim()));
     } catch {
       setResult(null);
     }
@@ -66,47 +66,45 @@ export default function Home() {
   useEffect(() => {
     let provider: ReturnType<typeof getWalletProvider> | null = null;
 
-    async function restoreWallet() {
+    async function restore() {
       try {
         provider = getWalletProvider();
-        const account = await getConnectedAccount();
-        const chainId = await getWalletChainId();
+        const connected = await restoreWallet();
 
-        if (account && chainId === STUDIO_DEV_CHAIN_ID.toLowerCase()) {
-          const connected = await connectWallet();
+        if (connected) {
           setWallet(connected.address);
           setClient(connected.client);
           setNetworkReady(true);
-          setStatus("Wallet connected to GenLayer Studio Dev.");
-        } else if (account) {
-          setWallet(account);
-          setNetworkReady(false);
-          setStatus("Wallet detected. Connect to switch to GenLayer Studio Dev.");
+          setStatus("Wallet restored on GenLayer Studio Dev.");
         }
       } catch {
-        // Wallet is optional until the user clicks Connect.
+        // Wallet is optional until the user explicitly connects.
       }
     }
 
-    restoreWallet();
+    restore();
 
-    const handleAccountsChanged = async (...args: unknown[]) => {
+    const handleAccountsChanged = (...args: unknown[]) => {
       const accounts = args[0] as string[] | undefined;
       const address = accounts?.[0] ?? "";
       setWallet(address);
       setClient(null);
       setNetworkReady(false);
-      setStatus(address ? "Wallet account changed. Reconnect to continue." : "Wallet disconnected.");
+      setStatus(
+        address
+          ? "Wallet account changed. Click Connect wallet to continue."
+          : "Wallet disconnected.",
+      );
     };
 
     const handleChainChanged = (...args: unknown[]) => {
       const chainId = String(args[0] ?? "").toLowerCase();
-      setNetworkReady(chainId === STUDIO_DEV_CHAIN_ID.toLowerCase());
       setClient(null);
+      setNetworkReady(chainId === STUDIO_DEV_CHAIN_ID.toLowerCase());
       setStatus(
         chainId === STUDIO_DEV_CHAIN_ID.toLowerCase()
-          ? "GenLayer Studio Dev selected. Reconnect wallet to continue."
-          : "Wrong network. Connect again to switch to GenLayer Studio Dev.",
+          ? "GenLayer Studio Dev selected. Click Connect wallet to continue."
+          : "Wrong network. Click Connect wallet to switch to GenLayer Studio Dev.",
       );
     };
 
@@ -116,10 +114,8 @@ export default function Home() {
     }
 
     return () => {
-      if (provider?.removeListener) {
-        provider.removeListener("accountsChanged", handleAccountsChanged);
-        provider.removeListener("chainChanged", handleChainChanged);
-      }
+      provider?.removeListener?.("accountsChanged", handleAccountsChanged);
+      provider?.removeListener?.("chainChanged", handleChainChanged);
     };
   }, []);
 
@@ -134,7 +130,9 @@ export default function Home() {
     setTxHash("");
 
     try {
-      const response = await sendWrite(client, "create_work", [workId.trim(), title.trim(), criteria.trim()]);
+      const response = await sendWrite(client, "create_work", [
+        workId.trim(), title.trim(), criteria.trim(),
+      ]);
       setTxHash(response.txHash);
       setStatus("Work request finalized. You can now submit public evidence.");
       await refresh();
@@ -154,7 +152,9 @@ export default function Home() {
     setTxHash("");
 
     try {
-      const response = await sendWrite(client, "submit_evidence", [workId.trim(), evidence.trim()]);
+      const response = await sendWrite(client, "submit_evidence", [
+        workId.trim(), evidence.trim(),
+      ]);
       setTxHash(response.txHash);
       setStatus("Evidence submitted. The work is ready for GenLayer verification.");
       await refresh();
@@ -206,7 +206,11 @@ export default function Home() {
         </div>
         <div className="row">
           <span className="badge">Studio Dev · 61997</span>
-          {!networkReady && <button className="secondary" onClick={switchNetwork} disabled={busy}>Switch network</button>}
+          {!networkReady && (
+            <button className="secondary" onClick={switchNetwork} disabled={busy}>
+              Switch network
+            </button>
+          )}
           <button className="secondary" onClick={connect} disabled={busy}>
             {wallet ? shortAddress(wallet) : "Connect wallet"}
           </button>
@@ -241,32 +245,61 @@ export default function Home() {
           <h2>Submit evidence</h2>
           <label>Public evidence URL</label>
           <input value={evidence} onChange={(e) => setEvidence(e.target.value)} maxLength={1000} />
-          <p className="small">Use public HTTPS evidence such as a deployed website, GitHub page, documentation, or another publicly readable artifact.</p>
+          <p className="small">
+            Use public HTTPS evidence such as a deployed website, GitHub page,
+            documentation, or another publicly readable artifact.
+          </p>
           <button onClick={submit} disabled={busy || !client || !networkReady}>Submit evidence</button>
-          <button className="secondary" onClick={verify} disabled={busy || !client || !networkReady}>Verify with GenLayer</button>
+          <button className="secondary" onClick={verify} disabled={busy || !client || !networkReady}>
+            Verify with GenLayer
+          </button>
         </section>
       </div>
 
       <section className="card verification" style={{ marginTop: 18 }}>
         <div className="row space-between">
-          <div><div className="step">03</div><h2>Consensus verdict</h2></div>
+          <div>
+            <div className="step">03</div>
+            <h2>Consensus verdict</h2>
+          </div>
           <div className="row">
             {result && <span className="badge">{result.status}</span>}
             <button className="secondary" onClick={refresh} disabled={busy}>Refresh</button>
           </div>
         </div>
+
         <div className="status">{status}</div>
-        {txHash && <div className="tx"><span>Transaction</span><code>{shortAddress(txHash)}</code></div>}
+
+        {txHash && (
+          <div className="tx">
+            <span>Transaction</span>
+            <code>{shortAddress(txHash)}</code>
+          </div>
+        )}
+
         {result && (
           <div className="result">
-            <div><div className="small">Verification score</div><div className="score">{result.score}<span className="small"> / 100</span></div></div>
-            <div><div className="small">Decision</div><strong className={result.approved ? "approved" : "rejected"}>{result.approved ? "APPROVED" : "NOT APPROVED"}</strong></div>
-            <div className="summary"><div className="small">Evidence-grounded summary</div><p>{result.summary || "No verification summary yet."}</p></div>
+            <div>
+              <div className="small">Verification score</div>
+              <div className="score">{result.score}<span className="small"> / 100</span></div>
+            </div>
+            <div>
+              <div className="small">Decision</div>
+              <strong className={result.approved ? "approved" : "rejected"}>
+                {result.approved ? "APPROVED" : "NOT APPROVED"}
+              </strong>
+            </div>
+            <div className="summary">
+              <div className="small">Evidence-grounded summary</div>
+              <p>{result.summary || "No verification summary yet."}</p>
+            </div>
           </div>
         )}
       </section>
 
-      <footer>Contract: <code>0x4F0b…444c5</code> · GenLayer Studio Devnet</footer>
+      <footer>
+        Contract: <code>0x4F0b…444c5</code> · GenLayer Studio Devnet
+      </footer>
     </main>
   );
 }
