@@ -1,406 +1,398 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import {
   connectWallet,
-  restoreWallet,
-  changeWallet,
+  getConnectedAccount,
   getWalletProvider,
+  getWalletChainId,
   ensureBradburyNetwork,
   getWork,
   sendWrite,
-  BRADBURY_CHAIN_ID,
-  BRADBURY_CHAIN_ID_DECIMAL,
-  BRADBURY_EXPLORER,
+  TESTNET_BRADBURY_CHAIN_ID,
   CONTRACT_ADDRESS,
   type ProofWorkResult,
 } from "@/lib/genlayer";
 
-function shortAddress(address: string) {
-  if (!address) {
-    return "";
-  }
+type WalletClient = Awaited<ReturnType<typeof connectWallet>>["client"];
 
+function shortAddress(address: string): string {
+  if (!address) return "";
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function shortHash(hash: string) {
-  if (!hash) {
-    return "";
+function formatErrorValue(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
   }
 
-  return `${hash.slice(0, 10)}…${hash.slice(-8)}`;
+  try {
+    return JSON.stringify(
+      value,
+      (_key, nestedValue) =>
+        typeof nestedValue === "bigint"
+          ? nestedValue.toString()
+          : nestedValue,
+      2,
+    );
+  } catch {
+    return Object.prototype.toString.call(value);
+  }
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(error: unknown): string {
   if (error instanceof Error) {
-    return error.message;
+    const details = error as Error & {
+      code?: unknown;
+      shortMessage?: unknown;
+      details?: unknown;
+      cause?: unknown;
+      data?: unknown;
+    };
+
+    const parts: string[] = [];
+
+    if (details.shortMessage) {
+      parts.push(String(details.shortMessage));
+    } else {
+      parts.push(details.message);
+    }
+
+    if (details.code !== undefined) {
+      parts.push(`Code: ${String(details.code)}`);
+    }
+
+    if (details.details !== undefined) {
+      parts.push(
+        `Details: ${formatErrorValue(details.details)}`,
+      );
+    }
+
+    if (details.data !== undefined) {
+      parts.push(
+        `Data: ${formatErrorValue(details.data)}`,
+      );
+    }
+
+    if (details.cause !== undefined) {
+      parts.push(
+        `Cause: ${formatErrorValue(details.cause)}`,
+      );
+    }
+
+    return parts.join("\n");
   }
 
-  return String(error);
+  return formatErrorValue(error);
 }
 
 export default function Home() {
   const [wallet, setWallet] = useState("");
+  const [client, setClient] = useState<WalletClient | null>(null);
 
-  const [client, setClient] = useState<
-    Awaited<
-      ReturnType<typeof connectWallet>
-    >["client"] | null
-  >(null);
+  const [walletDetected, setWalletDetected] = useState(false);
+  const [networkReady, setNetworkReady] = useState(false);
 
-  const [networkReady, setNetworkReady] =
-    useState(false);
-
-  const [busy, setBusy] = useState(false);
-
-  const [walletAction, setWalletAction] =
-    useState<
-      | "connect"
-      | "disconnect"
-      | "change"
-      | "switch"
-      | null
-    >(null);
-
-  // Empty by default.
   const [workId, setWorkId] = useState("");
-
   const [title, setTitle] = useState("");
-
-  const [criteria, setCriteria] =
-    useState("");
-
-  const [evidence, setEvidence] =
-    useState("");
+  const [criteria, setCriteria] = useState("");
+  const [evidence, setEvidence] = useState("");
 
   const [status, setStatus] = useState(
     "Connect your wallet to begin.",
   );
 
   const [result, setResult] =
-    useState<ProofWorkResult | null>(
-      null,
-    );
+    useState<ProofWorkResult | null>(null);
 
-  const [txHash, setTxHash] =
-    useState("");
+  const [busy, setBusy] = useState(false);
+  const [txHash, setTxHash] = useState("");
 
   async function refresh() {
     const id = workId.trim();
 
     if (!id) {
-      setStatus(
-        "Enter a Work ID to load a work request.",
-      );
+      setResult(null);
       return;
     }
 
     try {
-      const work = await getWork(id);
-
-      setResult(work);
-
-      setStatus(
-        "Work request loaded.",
-      );
-    } catch (error) {
+      const value = await getWork(id);
+      setResult(value);
+    } catch {
       setResult(null);
-
-      setStatus(
-        errorMessage(error),
-      );
     }
   }
 
   async function connect() {
     try {
       setBusy(true);
-      setWalletAction("connect");
-
       setStatus(
-        "Connecting to GenLayer Testnet Bradbury…",
+        "Connecting wallet and checking GenLayer Bradbury…",
       );
 
-      const connected =
-        await connectWallet();
+      const connected = await connectWallet();
 
-      setWallet(
-        connected.address,
-      );
-
-      setClient(
-        connected.client,
-      );
-
+      setWallet(connected.address);
+      setClient(connected.client);
+      setWalletDetected(true);
       setNetworkReady(true);
 
       setStatus(
-        `Wallet connected: ${shortAddress(
-          connected.address,
-        )}`,
+        "Wallet connected to GenLayer Bradbury Testnet.",
       );
     } catch (error) {
+      console.error("Wallet connection error:", error);
+
       setNetworkReady(false);
 
       setStatus(
-        errorMessage(error),
+        `Wallet connection failed:\n${errorMessage(error)}`,
       );
     } finally {
       setBusy(false);
-      setWalletAction(null);
     }
   }
 
-  async function handleChangeWallet() {
+  async function changeWallet() {
     try {
       setBusy(true);
-      setWalletAction("change");
+      setStatus("Opening wallet account selector…");
 
-      setStatus(
-        "Opening wallet account selector…",
-      );
+      const provider = getWalletProvider();
 
-      const connected =
-        await changeWallet();
+      try {
+        await provider.request({
+          method: "wallet_requestPermissions",
+          params: [
+            {
+              eth_accounts: {},
+            },
+          ],
+        });
+      } catch {
+        // Some wallets do not implement wallet_requestPermissions.
+      }
 
-      setWallet(
-        connected.address,
-      );
+      const accounts = (await provider.request({
+        method: "eth_requestAccounts",
+      })) as string[];
 
-      setClient(
-        connected.client,
-      );
+      const address = accounts?.[0] as
+        | `0x${string}`
+        | undefined;
 
+      if (!address) {
+        throw new Error(
+          "No wallet account was returned.",
+        );
+      }
+
+      const connected = await connectWallet();
+
+      setWallet(connected.address);
+      setClient(connected.client);
+      setWalletDetected(true);
       setNetworkReady(true);
 
       setStatus(
-        `Wallet changed to ${shortAddress(
-          connected.address,
-        )}`,
+        `Wallet changed to ${shortAddress(address)}.`,
       );
     } catch (error) {
+      console.error("Change wallet error:", error);
+
       setStatus(
-        errorMessage(error),
+        `Could not change wallet:\n${errorMessage(error)}`,
       );
     } finally {
       setBusy(false);
-      setWalletAction(null);
     }
   }
 
-  /**
-   * Disconnect ProofWork's frontend session.
-   *
-   * This clears the active wallet/client from
-   * the app. It does not revoke the browser
-   * wallet's permission for the site.
-   */
-  function disconnect() {
-    setWalletAction("disconnect");
+  function disconnectWallet() {
+    /*
+     * This disconnects ProofWork's frontend session.
+     * It does NOT revoke wallet permissions from the browser wallet.
+     */
+    setWallet("");
+    setClient(null);
+    setNetworkReady(false);
+    setResult(null);
+    setTxHash("");
 
     setStatus(
-      "Disconnecting wallet…",
+      "ProofWork wallet session disconnected. Your browser wallet permission remains unchanged.",
     );
-
-    window.setTimeout(() => {
-      setWallet("");
-      setClient(null);
-      setNetworkReady(false);
-      setTxHash("");
-      setResult(null);
-
-      setStatus(
-        "Wallet disconnected from ProofWork.",
-      );
-
-      setWalletAction(null);
-    }, 450);
   }
 
   async function switchNetwork() {
     try {
       setBusy(true);
-      setWalletAction("switch");
-
       setStatus(
-        "Switching to GenLayer Testnet Bradbury…",
+        "Switching wallet to GenLayer Bradbury Testnet…",
       );
 
       await ensureBradburyNetwork();
 
-      /*
-       * Network switching alone does not create
-       * the GenLayerJS wallet client, so reconnect
-       * after the switch when an account exists.
-       */
-      if (wallet) {
-        const connected =
-          await connectWallet();
+      const chainId = await getWalletChainId();
 
-        setWallet(
-          connected.address,
-        );
-
-        setClient(
-          connected.client,
+      if (
+        chainId.toLowerCase() !==
+        TESTNET_BRADBURY_CHAIN_ID.toLowerCase()
+      ) {
+        throw new Error(
+          "The wallet did not switch to GenLayer Bradbury Testnet.",
         );
       }
 
       setNetworkReady(true);
 
       setStatus(
-        "GenLayer Testnet Bradbury selected.",
+        "GenLayer Bradbury Testnet selected. Connect your wallet to continue.",
       );
     } catch (error) {
+      console.error("Network switch error:", error);
+
       setStatus(
-        errorMessage(error),
+        `Network switch failed:\n${errorMessage(error)}`,
       );
     } finally {
       setBusy(false);
-      setWalletAction(null);
     }
   }
 
   useEffect(() => {
     let provider:
-      | ReturnType<
-          typeof getWalletProvider
-        >
+      | ReturnType<typeof getWalletProvider>
       | null = null;
 
-    try {
-      provider =
-        getWalletProvider();
-    } catch {
-      provider = null;
-    }
-
-    async function restore() {
-      if (!provider) {
-        return;
-      }
-
+    async function restoreWallet() {
       try {
-        const connected =
-          await restoreWallet();
+        provider = getWalletProvider();
 
-        if (!connected) {
+        setWalletDetected(true);
+
+        const account = await getConnectedAccount();
+
+        if (!account) {
+          setStatus("Wallet detected. Connect your wallet to begin.");
           return;
         }
 
-        setWallet(
-          connected.address,
-        );
+        setWallet(account);
 
-        setClient(
-          connected.client,
-        );
+        const chainId = await getWalletChainId();
+
+        if (
+          chainId.toLowerCase() !==
+          TESTNET_BRADBURY_CHAIN_ID.toLowerCase()
+        ) {
+          setNetworkReady(false);
+
+          setStatus(
+            "Wallet detected, but it is on the wrong network. Switch to GenLayer Bradbury Testnet.",
+          );
+
+          return;
+        }
 
         setNetworkReady(true);
 
+        /*
+         * We intentionally don't automatically create a GenLayer client
+         * here. The user can explicitly connect when needed.
+         */
         setStatus(
-          `Wallet connected: ${shortAddress(
-            connected.address,
-          )}`,
+          `Wallet detected: ${shortAddress(account)}. Ready to connect.`,
         );
       } catch {
-        // Wallet is optional.
+        setWalletDetected(false);
       }
     }
 
-    void restore();
+    restoreWallet();
 
     const handleAccountsChanged = (
       ...args: unknown[]
     ) => {
-      const accounts =
-        args[0] as
-          | string[]
-          | undefined;
+      const accounts = args[0] as string[] | undefined;
+      const address = accounts?.[0] ?? "";
 
-      const address =
-        accounts?.[0] ?? "";
+      setWallet(address);
+      setClient(null);
 
       if (!address) {
-        setWallet("");
-        setClient(null);
         setNetworkReady(false);
 
         setStatus(
-          "Wallet disconnected.",
+          "Wallet account disconnected from the browser wallet.",
         );
 
         return;
       }
 
-      setWallet(address);
-      setClient(null);
+      setWalletDetected(true);
       setNetworkReady(false);
 
       setStatus(
         `Wallet changed to ${shortAddress(
           address,
-        )}.`,
+        )}. Connect again to continue.`,
       );
     };
 
     const handleChainChanged = (
       ...args: unknown[]
     ) => {
-      const chainId =
-        String(
-          args[0] ?? "",
-        ).toLowerCase();
-
-      const correctNetwork =
-        chainId ===
-        BRADBURY_CHAIN_ID.toLowerCase();
+      const chainId = String(
+        args[0] ?? "",
+      ).toLowerCase();
 
       setClient(null);
 
-      setNetworkReady(
-        correctNetwork,
-      );
+      const correctNetwork =
+        chainId ===
+        TESTNET_BRADBURY_CHAIN_ID.toLowerCase();
+
+      setNetworkReady(correctNetwork);
 
       if (correctNetwork) {
         setStatus(
-          `GenLayer Testnet Bradbury selected · Chain ${BRADBURY_CHAIN_ID_DECIMAL}.`,
+          "GenLayer Bradbury Testnet selected. Connect your wallet to continue.",
         );
       } else {
         setStatus(
-          "Wrong network. Switch to GenLayer Testnet Bradbury.",
+          "Wrong network selected. Switch to GenLayer Bradbury Testnet.",
         );
       }
     };
 
-    if (provider) {
-      provider.on?.(
+    if (provider?.on) {
+      provider.on(
         "accountsChanged",
         handleAccountsChanged,
       );
 
-      provider.on?.(
+      provider.on(
         "chainChanged",
         handleChainChanged,
       );
     }
 
     return () => {
-      if (!provider) {
-        return;
-      }
-
-      provider.removeListener?.(
+      provider?.removeListener?.(
         "accountsChanged",
         handleAccountsChanged,
       );
 
-      provider.removeListener?.(
+      provider?.removeListener?.(
         "chainChanged",
         handleChainChanged,
       );
@@ -408,68 +400,88 @@ export default function Home() {
   }, []);
 
   async function create() {
+    if (!wallet) {
+      setStatus("Connect your wallet first.");
+      return;
+    }
+
     if (!client || !networkReady) {
       setStatus(
-        "Connect your wallet to GenLayer Testnet Bradbury first.",
+        "Connect your wallet to GenLayer Bradbury Testnet first.",
       );
-
       return;
     }
 
     if (!workId.trim()) {
-      setStatus(
-        "Please enter a Work ID.",
-      );
-
+      setStatus("Enter a work ID.");
       return;
     }
 
     if (!title.trim()) {
-      setStatus(
-        "Please enter a title.",
-      );
-
+      setStatus("Enter a work title.");
       return;
     }
 
     if (!criteria.trim()) {
-      setStatus(
-        "Please enter the acceptance criteria.",
-      );
+      setStatus("Enter the acceptance criteria.");
+      return;
+    }
 
+    if (workId.trim().length > 80) {
+      setStatus(
+        "Work ID must be 80 characters or fewer.",
+      );
+      return;
+    }
+
+    if (title.trim().length > 200) {
+      setStatus(
+        "Title must be 200 characters or fewer.",
+      );
+      return;
+    }
+
+    if (criteria.trim().length > 4000) {
+      setStatus(
+        "Acceptance criteria must be 4000 characters or fewer.",
+      );
       return;
     }
 
     setBusy(true);
-    setStatus(
-      "Creating work request on GenLayer…",
-    );
     setTxHash("");
+    setResult(null);
+
+    setStatus(
+      "Creating the work request on GenLayer…",
+    );
 
     try {
-      const response =
-        await sendWrite(
-          client,
-          "create_work",
-          [
-            workId.trim(),
-            title.trim(),
-            criteria.trim(),
-          ],
-        );
-
-      setTxHash(
-        response.txHash,
+      const response = await sendWrite(
+        client,
+        "create_work",
+        [
+          workId.trim(),
+          title.trim(),
+          criteria.trim(),
+        ],
       );
 
+      setTxHash(response.txHash);
+
       setStatus(
-        "Work request finalized successfully.",
+        "Work request finalized. You can now submit the evidence URL.",
       );
 
       await refresh();
     } catch (error) {
+      console.error(
+        "ProofWork create error:",
+        error,
+      );
+
       setStatus(
-        errorMessage(error),
+        `Create request failed:\n${errorMessage(error)}`,
       );
     } finally {
       setBusy(false);
@@ -477,71 +489,78 @@ export default function Home() {
   }
 
   async function submit() {
+    if (!wallet) {
+      setStatus("Connect your wallet first.");
+      return;
+    }
+
     if (!client || !networkReady) {
       setStatus(
-        "Connect your wallet to GenLayer Testnet Bradbury first.",
+        "Connect your wallet to GenLayer Bradbury Testnet first.",
       );
-
       return;
     }
 
     if (!workId.trim()) {
       setStatus(
-        "Please enter a Work ID.",
+        "Enter the work ID you want to update.",
       );
-
       return;
     }
 
     if (!evidence.trim()) {
-      setStatus(
-        "Please enter an evidence URL.",
-      );
-
+      setStatus("Enter a public evidence URL.");
       return;
     }
 
-    if (
-      !evidence
-        .trim()
-        .startsWith("https://")
-    ) {
+    if (!evidence.trim().startsWith("https://")) {
       setStatus(
         "Evidence URL must start with https://",
       );
+      return;
+    }
 
+    if (evidence.trim().length > 1000) {
+      setStatus(
+        "Evidence URL must be 1000 characters or fewer.",
+      );
       return;
     }
 
     setBusy(true);
-    setStatus(
-      "Submitting evidence…",
-    );
     setTxHash("");
 
-    try {
-      const response =
-        await sendWrite(
-          client,
-          "submit_evidence",
-          [
-            workId.trim(),
-            evidence.trim(),
-          ],
-        );
+    setStatus(
+      "Submitting evidence to the ProofWork contract…",
+    );
 
-      setTxHash(
-        response.txHash,
+    try {
+      const response = await sendWrite(
+        client,
+        "submit_evidence",
+        [
+          workId.trim(),
+          evidence.trim(),
+        ],
       );
 
+      setTxHash(response.txHash);
+
       setStatus(
-        "Evidence submitted successfully.",
+        "Evidence submitted. The work is ready for GenLayer verification.",
       );
 
       await refresh();
     } catch (error) {
+      console.error(
+        "ProofWork submit evidence error:",
+        error,
+      );
+
       setStatus(
-        errorMessage(error),
+        `Evidence submission failed:\n${errorMessage(
+          error,
+        )}`,
       );
     } finally {
       setBusy(false);
@@ -549,39 +568,40 @@ export default function Home() {
   }
 
   async function verify() {
+    if (!wallet) {
+      setStatus("Connect your wallet first.");
+      return;
+    }
+
     if (!client || !networkReady) {
       setStatus(
-        "Connect your wallet to GenLayer Testnet Bradbury first.",
+        "Connect your wallet to GenLayer Bradbury Testnet first.",
       );
-
       return;
     }
 
     if (!workId.trim()) {
       setStatus(
-        "Please enter a Work ID.",
+        "Enter the work ID you want to verify.",
       );
-
       return;
     }
 
     setBusy(true);
+    setTxHash("");
+
     setStatus(
       "GenLayer is evaluating the evidence and reaching validator consensus…",
     );
-    setTxHash("");
 
     try {
-      const response =
-        await sendWrite(
-          client,
-          "verify_work",
-          [workId.trim()],
-        );
-
-      setTxHash(
-        response.txHash,
+      const response = await sendWrite(
+        client,
+        "verify_work",
+        [workId.trim()],
       );
+
+      setTxHash(response.txHash);
 
       setStatus(
         "Verification finalized. The consensus-backed verdict is now stored onchain.",
@@ -589,28 +609,27 @@ export default function Home() {
 
       await refresh();
     } catch (error) {
+      console.error(
+        "ProofWork verification error:",
+        error,
+      );
+
+      setResult(null);
+
       setStatus(
-        errorMessage(error),
+        `Verification failed:\n${errorMessage(
+          error,
+        )}`,
       );
     } finally {
       setBusy(false);
     }
   }
 
-  const hasWallet =
-    Boolean(wallet);
-
   const connected =
-    Boolean(
-      wallet &&
-        client &&
-        networkReady,
-    );
-
-  const contractDisplay =
-    shortAddress(
-      CONTRACT_ADDRESS,
-    );
+    Boolean(wallet) &&
+    Boolean(client) &&
+    networkReady;
 
   return (
     <main>
@@ -621,105 +640,81 @@ export default function Home() {
           </div>
 
           <div className="small">
-            Evidence-backed work
-            verification
+            Evidence-backed work verification
           </div>
         </div>
 
-        <div className="wallet-area">
-          <span className="network-badge">
-            Bradbury ·{" "}
-            {BRADBURY_CHAIN_ID_DECIMAL}
+        <div className="row">
+          <span className="badge">
+            GenLayer Bradbury · 4221
           </span>
 
-          {hasWallet ? (
-            <div className="connected-wallet">
-              <span
-                className={`connected-pill ${
-                  connected
-                    ? ""
-                    : "wallet-detected"
-                }`}
-              >
-                <span className="pulse-dot" />
-
-                <span>
-                  {connected
-                    ? "Connected"
+          {walletDetected ? (
+            <>
+              {networkReady ? (
+                <span className="connected-pill">
+                  <span className="pulse-dot" />
+                  {wallet
+                    ? shortAddress(wallet)
                     : "Wallet detected"}
                 </span>
-
-                <span className="wallet-address">
-                  {shortAddress(
-                    wallet,
-                  )}
+              ) : (
+                <span className="wallet-detected">
+                  <span className="pulse-dot" />
+                  Wallet detected
                 </span>
-              </span>
+              )}
 
               {!networkReady && (
                 <button
-                  className="wallet-action"
-                  onClick={
-                    switchNetwork
-                  }
+                  className="secondary wallet-action"
+                  onClick={switchNetwork}
                   disabled={busy}
                 >
-                  {walletAction ===
-                  "switch" ? (
-                    <>
-                      <span className="spinner small-spinner" />
-                      Switching…
-                    </>
-                  ) : (
-                    "Switch network"
-                  )}
+                  Switch network
                 </button>
               )}
 
-              <button
-                className="wallet-action"
-                onClick={
-                  handleChangeWallet
-                }
-                disabled={busy}
-              >
-                {walletAction ===
-                "change" ? (
-                  <>
-                    <span className="spinner small-spinner" />
-                    Changing…
-                  </>
-                ) : (
-                  "Change wallet"
-                )}
-              </button>
+              {wallet && (
+                <button
+                  className="secondary wallet-action"
+                  onClick={changeWallet}
+                  disabled={busy}
+                >
+                  Change wallet
+                </button>
+              )}
 
-              <button
-                className="disconnect-button"
-                onClick={disconnect}
-                disabled={
-                  walletAction ===
-                  "disconnect"
-                }
-              >
-                {walletAction ===
-                "disconnect" ? (
-                  <>
-                    <span className="spinner small-spinner" />
-                    Disconnecting…
-                  </>
-                ) : (
-                  "Disconnect wallet"
-                )}
-              </button>
-            </div>
+              {wallet && (
+                <button
+                  className="disconnect-button"
+                  onClick={disconnectWallet}
+                  disabled={busy}
+                >
+                  Disconnect
+                </button>
+              )}
+
+              {!wallet && (
+                <button
+                  className="wallet-button"
+                  onClick={connect}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <>
+                      <span className="spinner" />
+                      Connecting…
+                    </>
+                  ) : (
+                    "Connect wallet"
+                  )}
+                </button>
+              )}
+            </>
           ) : (
             <button
-              className={`wallet-button ${
-                busy
-                  ? "is-loading"
-                  : ""
-              }`}
+              className="wallet-button"
               onClick={connect}
               disabled={busy}
             >
@@ -729,13 +724,7 @@ export default function Home() {
                   Connecting…
                 </>
               ) : (
-                <>
-                  <span className="wallet-icon">
-                    ◈
-                  </span>
-
-                  Connect wallet
-                </>
+                "Connect wallet"
               )}
             </button>
           )}
@@ -753,24 +742,20 @@ export default function Home() {
         </h1>
 
         <p className="lead">
-          ProofWork turns acceptance
-          criteria and public evidence
-          into a consensus-backed
-          verdict. The Intelligent
-          Contract retrieves the
+          ProofWork turns acceptance criteria
+          and public evidence into a
+          consensus-backed verdict. The
+          Intelligent Contract retrieves the
           evidence, evaluates it with
-          nondeterministic execution,
-          and asks validators to
-          independently verify the
-          result.
+          nondeterministic execution, and asks
+          validators to independently verify
+          the result.
         </p>
       </section>
 
       <div className="grid">
         <section className="card">
-          <div className="step">
-            01
-          </div>
+          <div className="step">01</div>
 
           <h2>
             Create work request
@@ -783,12 +768,11 @@ export default function Home() {
           <input
             value={workId}
             onChange={(event) =>
-              setWorkId(
-                event.target.value,
-              )
+              setWorkId(event.target.value)
             }
+            placeholder="e.g. client-website-001"
             maxLength={80}
-            placeholder="Enter a unique work ID"
+            disabled={busy}
           />
 
           <label>
@@ -798,12 +782,11 @@ export default function Home() {
           <input
             value={title}
             onChange={(event) =>
-              setTitle(
-                event.target.value,
-              )
+              setTitle(event.target.value)
             }
+            placeholder="What work needs to be verified?"
             maxLength={200}
-            placeholder="Enter the work title"
+            disabled={busy}
           />
 
           <label>
@@ -813,30 +796,33 @@ export default function Home() {
           <textarea
             value={criteria}
             onChange={(event) =>
-              setCriteria(
-                event.target.value,
-              )
+              setCriteria(event.target.value)
             }
+            placeholder="Describe exactly what the evidence must demonstrate."
             maxLength={4000}
-            placeholder="Describe exactly what the evidence must prove"
+            disabled={busy}
           />
 
           <button
             onClick={create}
             disabled={
               busy ||
-              !client ||
-              !networkReady
+              !connected
             }
           >
-            Create request
+            {busy ? (
+              <>
+                <span className="small-spinner" />
+                Processing…
+              </>
+            ) : (
+              "Create request"
+            )}
           </button>
         </section>
 
         <section className="card">
-          <div className="step">
-            02
-          </div>
+          <div className="step">02</div>
 
           <h2>
             Submit evidence
@@ -849,29 +835,35 @@ export default function Home() {
           <input
             value={evidence}
             onChange={(event) =>
-              setEvidence(
-                event.target.value,
-              )
+              setEvidence(event.target.value)
             }
+            placeholder="https://example.com/my-work"
             maxLength={1000}
-            placeholder="https://your-public-evidence-url.com"
+            disabled={busy}
           />
 
           <p className="small">
-            Submit a public HTTPS page
-            containing evidence of the
-            completed work.
+            Use publicly readable HTTPS evidence
+            such as a deployed website, GitHub
+            page, documentation, or another
+            public artifact.
           </p>
 
           <button
             onClick={submit}
             disabled={
               busy ||
-              !client ||
-              !networkReady
+              !connected
             }
           >
-            Submit evidence
+            {busy ? (
+              <>
+                <span className="small-spinner" />
+                Processing…
+              </>
+            ) : (
+              "Submit evidence"
+            )}
           </button>
 
           <button
@@ -879,20 +871,24 @@ export default function Home() {
             onClick={verify}
             disabled={
               busy ||
-              !client ||
-              !networkReady
+              !connected
             }
           >
-            Verify with GenLayer
+            {busy ? (
+              <>
+                <span className="small-spinner" />
+                Verifying…
+              </>
+            ) : (
+              "Verify with GenLayer"
+            )}
           </button>
         </section>
       </div>
 
       <section
         className="card verification"
-        style={{
-          marginTop: 18,
-        }}
+        style={{ marginTop: 18 }}
       >
         <div className="row space-between">
           <div>
@@ -932,15 +928,9 @@ export default function Home() {
               Transaction
             </span>
 
-            <a
-              href={`${BRADBURY_EXPLORER}/tx/${txHash}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <code>
-                {shortHash(txHash)}
-              </code>
-            </a>
+            <code>
+              {txHash}
+            </code>
           </div>
         )}
 
@@ -953,7 +943,6 @@ export default function Home() {
 
               <div className="score">
                 {result.score}
-
                 <span className="small">
                   {" "}
                   / 100
@@ -981,8 +970,7 @@ export default function Home() {
 
             <div className="summary">
               <div className="small">
-                Evidence-grounded
-                summary
+                Evidence-grounded summary
               </div>
 
               <p>
@@ -995,13 +983,20 @@ export default function Home() {
       </section>
 
       <footer>
-        Contract:{" "}
-        <code>
-          {contractDisplay}
-        </code>{" "}
-        · GenLayer Testnet Bradbury ·
-        Chain{" "}
-        {BRADBURY_CHAIN_ID_DECIMAL}
+        <div>
+          Contract:
+          {" "}
+          <code>
+            {shortAddress(
+              CONTRACT_ADDRESS,
+            )}
+          </code>
+        </div>
+
+        <div>
+          GenLayer Bradbury Testnet ·
+          Chain ID 4221
+        </div>
       </footer>
     </main>
   );
