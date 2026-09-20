@@ -7,10 +7,10 @@ import {
   restoreWallet,
   changeWallet,
   getWalletProvider,
-  ensureStudioDevNetwork,
+  ensureTestnetNetwork,
   getWork,
   sendWrite,
-  STUDIO_DEV_CHAIN_ID,
+  TESTNET_CHAIN_ID,
   type ProofWorkResult,
 } from "@/lib/genlayer";
 
@@ -30,8 +30,11 @@ function errorMessage(error: unknown) {
 
 export default function Home() {
   const [wallet, setWallet] = useState("");
+
   const [client, setClient] = useState<
-    Awaited<ReturnType<typeof connectWallet>>["client"] | null
+    Awaited<
+      ReturnType<typeof connectWallet>
+    >["client"] | null
   >(null);
 
   const [networkReady, setNetworkReady] =
@@ -43,21 +46,24 @@ export default function Home() {
   const [title, setTitle] =
     useState("Landing page delivery");
 
-  const [criteria, setCriteria] = useState(
-    "The evidence must show a responsive page, a clear headline, and working navigation.",
-  );
+  const [criteria, setCriteria] =
+    useState(
+      "The evidence must show a responsive page, a clear headline, and working navigation.",
+    );
 
   const [evidence, setEvidence] =
     useState("https://example.com");
 
-  const [status, setStatus] = useState(
-    "Connect your wallet to begin.",
-  );
+  const [status, setStatus] =
+    useState(
+      "Connect your wallet to begin.",
+    );
 
   const [result, setResult] =
     useState<ProofWorkResult | null>(null);
 
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] =
+    useState(false);
 
   const [txHash, setTxHash] =
     useState("");
@@ -79,22 +85,26 @@ export default function Home() {
   }
 
   /**
-   * Explicit wallet connection.
+   * Connect wallet.
    */
   async function connect() {
     try {
       setBusy(true);
 
       setStatus(
-        "Checking wallet and GenLayer Studio Dev network…",
+        "Checking wallet and GenLayer Testnet Asimov network…",
       );
 
       const connected =
         await connectWallet();
 
-      setWallet(connected.address);
+      setWallet(
+        connected.address,
+      );
 
-      setClient(connected.client);
+      setClient(
+        connected.client,
+      );
 
       setNetworkReady(true);
 
@@ -115,8 +125,7 @@ export default function Home() {
   }
 
   /**
-   * Change wallet account using the wallet's
-   * account selector.
+   * Change wallet account.
    */
   async function handleChangeWallet() {
     try {
@@ -129,9 +138,13 @@ export default function Home() {
       const connected =
         await changeWallet();
 
-      setWallet(connected.address);
+      setWallet(
+        connected.address,
+      );
 
-      setClient(connected.client);
+      setClient(
+        connected.client,
+      );
 
       setNetworkReady(true);
 
@@ -150,12 +163,11 @@ export default function Home() {
   }
 
   /**
-   * Disconnects the wallet from ProofWork's
+   * Disconnect only the ProofWork
    * frontend session.
    *
-   * This does NOT revoke MetaMask's permission
-   * because EIP-1193 has no universal dapp-side
-   * disconnect method.
+   * EIP-1193 does not provide a universal
+   * dapp-side disconnect method.
    */
   function disconnect() {
     setWallet("");
@@ -173,7 +185,9 @@ export default function Home() {
 
   useEffect(() => {
     let provider:
-      | ReturnType<typeof getWalletProvider>
+      | ReturnType<
+          typeof getWalletProvider
+        >
       | null = null;
 
     async function restore() {
@@ -202,15 +216,15 @@ export default function Home() {
           );
         }
       } catch {
-        // Wallet is optional until manually connected.
+        /*
+         * Wallet is optional until
+         * manually connected.
+         */
       }
     }
 
     restore();
 
-    /**
-     * MetaMask/account change event.
-     */
     const handleAccountsChanged = (
       ...args: unknown[]
     ) => {
@@ -249,9 +263,6 @@ export default function Home() {
       );
     };
 
-    /**
-     * MetaMask/network change event.
-     */
     const handleChainChanged = (
       ...args: unknown[]
     ) => {
@@ -260,23 +271,23 @@ export default function Home() {
           args[0] ?? "",
         ).toLowerCase();
 
-      const isStudioDev =
+      const isTestnet =
         chainId ===
-        STUDIO_DEV_CHAIN_ID.toLowerCase();
+        TESTNET_CHAIN_ID.toLowerCase();
 
       setClient(null);
 
       setNetworkReady(
-        isStudioDev,
+        isTestnet,
       );
 
-      if (isStudioDev) {
+      if (isTestnet) {
         setStatus(
-          "GenLayer Studio Dev selected. Click Connect wallet to continue.",
+          "GenLayer Testnet Asimov selected. Click Connect wallet to continue.",
         );
       } else {
         setStatus(
-          "Wrong network. Click Switch network to use GenLayer Studio Dev.",
+          "Wrong network. Click Switch network to use GenLayer Testnet Asimov.",
         );
       }
     };
@@ -309,7 +320,7 @@ export default function Home() {
   async function create() {
     if (!client || !networkReady) {
       return setStatus(
-        "Connect your wallet to GenLayer Studio Dev first.",
+        "Connect your wallet to GenLayer Testnet Asimov first.",
       );
     }
 
@@ -332,15 +343,16 @@ export default function Home() {
     setTxHash("");
 
     try {
-      const response = await sendWrite(
-        client,
-        "create_work",
-        [
-          workId.trim(),
-          title.trim(),
-          criteria.trim(),
-        ],
-      );
+      const response =
+        await sendWrite(
+          client,
+          "create_work",
+          [
+            workId.trim(),
+            title.trim(),
+            criteria.trim(),
+          ],
+        );
 
       setTxHash(
         response.txHash,
@@ -363,7 +375,7 @@ export default function Home() {
   async function submit() {
     if (!client || !networkReady) {
       return setStatus(
-        "Connect your wallet to GenLayer Studio Dev first.",
+        "Connect your wallet to GenLayer Testnet Asimov first.",
       );
     }
 
@@ -386,14 +398,15 @@ export default function Home() {
     setTxHash("");
 
     try {
-      const response = await sendWrite(
-        client,
-        "submit_evidence",
-        [
-          workId.trim(),
-          evidence.trim(),
-        ],
-      );
+      const response =
+        await sendWrite(
+          client,
+          "submit_evidence",
+          [
+            workId.trim(),
+            evidence.trim(),
+          ],
+        );
 
       setTxHash(
         response.txHash,
@@ -416,7 +429,7 @@ export default function Home() {
   async function verify() {
     if (!client || !networkReady) {
       return setStatus(
-        "Connect your wallet to GenLayer Studio Dev first.",
+        "Connect your wallet to GenLayer Testnet Asimov first.",
       );
     }
 
@@ -429,11 +442,12 @@ export default function Home() {
     setTxHash("");
 
     try {
-      const response = await sendWrite(
-        client,
-        "verify_work",
-        [workId.trim()],
-      );
+      const response =
+        await sendWrite(
+          client,
+          "verify_work",
+          [workId.trim()],
+        );
 
       setTxHash(
         response.txHash,
@@ -457,12 +471,12 @@ export default function Home() {
     try {
       setBusy(true);
 
-      await ensureStudioDevNetwork();
+      await ensureTestnetNetwork();
 
       setNetworkReady(true);
 
       setStatus(
-        "GenLayer Studio Dev selected. Click Connect wallet to authorize the account.",
+        "GenLayer Testnet Asimov selected. Click Connect wallet to authorize the account.",
       );
     } catch (error) {
       setStatus(
@@ -489,13 +503,14 @@ export default function Home() {
           </div>
 
           <div className="small">
-            Evidence-backed work verification
+            Evidence-backed work
+            verification
           </div>
         </div>
 
         <div className="row">
           <span className="badge">
-            Studio Dev · 61997
+            Testnet Asimov · 4221
           </span>
 
           {connected ? (
@@ -541,9 +556,7 @@ export default function Home() {
 
               <button
                 className="secondary"
-                onClick={
-                  connect
-                }
+                onClick={connect}
                 disabled={busy}
               >
                 Connect wallet
@@ -566,12 +579,14 @@ export default function Home() {
         <p className="lead">
           ProofWork turns acceptance
           criteria and public evidence
-          into a consensus-backed verdict.
-          The Intelligent Contract retrieves
-          the evidence, evaluates it with
-          nondeterministic execution, and
-          asks validators to independently
-          verify the result.
+          into a consensus-backed
+          verdict. The Intelligent
+          Contract retrieves the
+          evidence, evaluates it with
+          nondeterministic execution,
+          and asks validators to
+          independently verify the
+          result.
         </p>
       </section>
 
@@ -756,6 +771,7 @@ export default function Home() {
 
               <div className="score">
                 {result.score}
+
                 <span className="small">
                   {" "}
                   / 100
@@ -798,9 +814,9 @@ export default function Home() {
       <footer>
         Contract:{" "}
         <code>
-          0x4F0b…444c5
+          {CONTRACT_ADDRESS_DISPLAY}
         </code>{" "}
-        · GenLayer Studio Devnet
+        · GenLayer Testnet Asimov
       </footer>
     </main>
   );
