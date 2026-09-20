@@ -2,9 +2,18 @@ import { createClient } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 
+/**
+ * ProofWork Intelligent Contract
+ *
+ * Hard-coded intentionally.
+ * No environment variables are required.
+ */
 export const CONTRACT_ADDRESS =
-  (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "") as `0x${string}`;
+  "0x4F0b22649e8503886761E87Aafe86869b4E444c5" as `0x${string}`;
 
+/**
+ * GenLayer Testnet Bradbury
+ */
 export const BRADBURY_CHAIN_ID = "0x107D";
 export const BRADBURY_CHAIN_ID_DECIMAL = 4221;
 
@@ -19,7 +28,11 @@ export type ProofWorkResult = {
   title: string;
   criteria: string;
   evidence_url: string;
-  status: "OPEN" | "SUBMITTED" | "VERIFIED" | string;
+  status:
+    | "OPEN"
+    | "SUBMITTED"
+    | "VERIFIED"
+    | string;
   score: number;
   approved: boolean;
   summary: string;
@@ -42,6 +55,9 @@ type Eip1193Provider = {
   ) => void;
 };
 
+/**
+ * Get the injected browser wallet.
+ */
 export function getWalletProvider(): Eip1193Provider {
   const provider = (
     window as Window & {
@@ -51,13 +67,16 @@ export function getWalletProvider(): Eip1193Provider {
 
   if (!provider) {
     throw new Error(
-      "No browser wallet detected. Install Rabby, MetaMask, or another EIP-1193 wallet.",
+      "No browser wallet detected. Please install Rabby, MetaMask, or another EIP-1193 wallet.",
     );
   }
 
   return provider;
 }
 
+/**
+ * Get current wallet chain ID.
+ */
 export async function getWalletChainId() {
   return String(
     await getWalletProvider().request({
@@ -66,6 +85,9 @@ export async function getWalletChainId() {
   ).toLowerCase();
 }
 
+/**
+ * Ensure the wallet is using Bradbury.
+ */
 export async function ensureBradburyNetwork(
   provider = getWalletProvider(),
 ) {
@@ -101,6 +123,9 @@ export async function ensureBradburyNetwork(
           )
         : undefined;
 
+    /**
+     * 4902 = network not yet added
+     */
     if (code !== 4902) {
       throw new Error(
         "Please switch your wallet to GenLayer Testnet Bradbury (chain 4221) and try again.",
@@ -112,7 +137,8 @@ export async function ensureBradburyNetwork(
       params: [
         {
           chainId: BRADBURY_CHAIN_ID,
-          chainName: "GenLayer Testnet Bradbury",
+          chainName:
+            "GenLayer Testnet Bradbury",
           nativeCurrency: {
             name: "GEN",
             symbol: "GEN",
@@ -143,12 +169,18 @@ export async function ensureBradburyNetwork(
   }
 }
 
+/**
+ * Read-only client.
+ */
 export function readClient() {
   return createClient({
     chain: testnetBradbury,
   });
 }
 
+/**
+ * Wallet-connected client.
+ */
 export function walletClient(
   address: `0x${string}`,
 ) {
@@ -159,14 +191,18 @@ export function walletClient(
   });
 }
 
+/**
+ * Connect wallet.
+ */
 export async function connectWallet() {
   const provider = getWalletProvider();
 
   await ensureBradburyNetwork(provider);
 
-  const accounts = (await provider.request({
-    method: "eth_requestAccounts",
-  })) as string[];
+  const accounts =
+    (await provider.request({
+      method: "eth_requestAccounts",
+    })) as string[];
 
   const address = accounts[0] as
     | `0x${string}`
@@ -178,7 +214,8 @@ export async function connectWallet() {
     );
   }
 
-  const client = walletClient(address);
+  const client =
+    walletClient(address);
 
   await client.connect(
     "testnetBradbury",
@@ -191,12 +228,17 @@ export async function connectWallet() {
   };
 }
 
+/**
+ * Restore an already-authorized wallet.
+ */
 export async function restoreWallet() {
-  const provider = getWalletProvider();
+  const provider =
+    getWalletProvider();
 
-  const accounts = (await provider.request({
-    method: "eth_accounts",
-  })) as string[];
+  const accounts =
+    (await provider.request({
+      method: "eth_accounts",
+    })) as string[];
 
   const address = accounts[0] as
     | `0x${string}`
@@ -219,7 +261,8 @@ export async function restoreWallet() {
     return null;
   }
 
-  const client = walletClient(address);
+  const client =
+    walletClient(address);
 
   await client.connect(
     "testnetBradbury",
@@ -232,14 +275,21 @@ export async function restoreWallet() {
   };
 }
 
+/**
+ * Change wallet/account.
+ */
 export async function changeWallet() {
-  const provider = getWalletProvider();
+  const provider =
+    getWalletProvider();
 
-  await ensureBradburyNetwork(provider);
+  await ensureBradburyNetwork(
+    provider,
+  );
 
-  const accounts = (await provider.request({
-    method: "eth_requestAccounts",
-  })) as string[];
+  const accounts =
+    (await provider.request({
+      method: "eth_requestAccounts",
+    })) as string[];
 
   const address = accounts[0] as
     | `0x${string}`
@@ -251,7 +301,8 @@ export async function changeWallet() {
     );
   }
 
-  const client = walletClient(address);
+  const client =
+    walletClient(address);
 
   await client.connect(
     "testnetBradbury",
@@ -264,10 +315,14 @@ export async function changeWallet() {
   };
 }
 
+/**
+ * Get the currently authorized wallet account.
+ */
 export async function getConnectedAccount() {
-  const accounts = (await getWalletProvider().request({
-    method: "eth_accounts",
-  })) as string[];
+  const accounts =
+    (await getWalletProvider().request({
+      method: "eth_accounts",
+    })) as string[];
 
   return (
     (accounts[0] as
@@ -276,15 +331,12 @@ export async function getConnectedAccount() {
   );
 }
 
+/**
+ * Read a work item.
+ */
 export async function getWork(
   workId: string,
 ): Promise<ProofWorkResult> {
-  if (!CONTRACT_ADDRESS) {
-    throw new Error(
-      "ProofWork contract address is not configured.",
-    );
-  }
-
   const result =
     await readClient().readContract({
       address: CONTRACT_ADDRESS,
@@ -300,17 +352,16 @@ type WriteFunction =
   | "submit_evidence"
   | "verify_work";
 
+/**
+ * Send a write transaction.
+ */
 export async function sendWrite(
-  client: ReturnType<typeof walletClient>,
+  client: ReturnType<
+    typeof walletClient
+  >,
   functionName: WriteFunction,
   args: string[],
 ) {
-  if (!CONTRACT_ADDRESS) {
-    throw new Error(
-      "ProofWork contract address is not configured.",
-    );
-  }
-
   const write = {
     address: CONTRACT_ADDRESS,
     functionName,
