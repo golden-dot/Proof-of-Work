@@ -1,100 +1,157 @@
 import { createClient } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
+import {
+  decodeFunctionResult,
+  encodeFunctionData,
+} from "viem";
 
 /**
- * ============================================================
- * ProofWork configuration
- * ============================================================
+ * ProofWork Intelligent Contract.
  */
-
 export const CONTRACT_ADDRESS =
   "0x4F0b22649e8503886761E87Aafe86869b4E444c5" as `0x${string}`;
 
-/**
- * GenLayer Testnet Bradbury
- */
-export const BRADBURY_CHAIN_ID =
-  "0x107D";
-
-export const TESTNET_BRADBURY_CHAIN_ID =
-  BRADBURY_CHAIN_ID;
-
-export const BRADBURY_CHAIN_ID_DECIMAL =
-  4221;
-
+/** GenLayer Testnet Bradbury. */
+export const BRADBURY_CHAIN_ID = "0x107D";
+export const TESTNET_BRADBURY_CHAIN_ID = BRADBURY_CHAIN_ID;
+export const BRADBURY_CHAIN_ID_DECIMAL = 4221;
 export const BRADBURY_RPC =
   "https://rpc-bradbury.genlayer.com";
-
 export const BRADBURY_EXPLORER =
   "https://explorer-bradbury.genlayer.com";
 
 /**
- * ============================================================
- * ProofWork result
- * ============================================================
+ * Bradbury Fee Manager.
  */
+const FEE_MANAGER_ADDRESS =
+  "0xF205868bf5db79d2162843742D18D0900A9E462a" as `0x${string}`;
+
+/**
+ * Fee Manager ABI used by the direct Bradbury RPC fee path.
+ *
+ * IMPORTANT:
+ * quoteGasPrice() is intentionally NOT present.
+ */
+const FEE_MANAGER_ABI = [
+  {
+    type: "function",
+    name: "GENPerTimeUnit",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "storageUnitPrice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "calculateRoundFees",
+    stateMutability: "view",
+    inputs: [
+      {
+        name: "_feesDistribution",
+        type: "tuple",
+        components: [
+          {
+            name: "leaderTimeunitsAllocation",
+            type: "uint256",
+          },
+          {
+            name: "validatorTimeunitsAllocation",
+            type: "uint256",
+          },
+          {
+            name: "appealRounds",
+            type: "uint256",
+          },
+          {
+            name: "executionBudgetPerRound",
+            type: "uint256",
+          },
+          {
+            name: "executionConsumed",
+            type: "uint256",
+          },
+          {
+            name: "totalMessageFees",
+            type: "uint256",
+          },
+          {
+            name: "rotations",
+            type: "uint256[]",
+          },
+          {
+            name: "maxPriceGenPerTimeUnit",
+            type: "uint256",
+          },
+          {
+            name: "storageFeeMaxGasPrice",
+            type: "uint256",
+          },
+          {
+            name: "receiptFeeMaxGasPrice",
+            type: "uint256",
+          },
+        ],
+      },
+      {
+        name: "_numOfValidators",
+        type: "uint256",
+      },
+      {
+        name: "round",
+        type: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "totalFeesToPay",
+        type: "uint256",
+      },
+    ],
+  },
+] as const;
 
 export type ProofWorkResult = {
   id: string;
-
   title: string;
-
   criteria: string;
-
   evidence_url: string;
-
   status:
     | "OPEN"
     | "SUBMITTED"
     | "VERIFIED"
     | string;
-
   score: number;
-
   approved: boolean;
-
   summary: string;
 };
 
-/**
- * ============================================================
- * Browser wallet provider
- * ============================================================
- */
-
-export type Eip1193Provider = {
+type Eip1193Provider = {
   request: (args: {
     method: string;
     params?: unknown[];
   }) => Promise<unknown>;
-
   on?: (
     event: string,
-    listener: (
-      ...args: unknown[]
-    ) => void,
+    listener: (...args: unknown[]) => void,
   ) => void;
-
   removeListener?: (
     event: string,
-    listener: (
-      ...args: unknown[]
-    ) => void,
+    listener: (...args: unknown[]) => void,
   ) => void;
 };
 
 /**
- * ============================================================
- * Wallet provider
- * ============================================================
+ * Get the injected browser wallet provider.
  */
-
 export function getWalletProvider(): Eip1193Provider {
-  if (
-    typeof window ===
-    "undefined"
-  ) {
+  if (typeof window === "undefined") {
     throw new Error(
       "Wallet access is only available in the browser.",
     );
@@ -116,39 +173,27 @@ export function getWalletProvider(): Eip1193Provider {
 }
 
 /**
- * ============================================================
- * Wallet chain ID
- * ============================================================
+ * Read the wallet's current chain id.
  */
-
 export async function getWalletChainId(): Promise<string> {
-  const result =
-    await getWalletProvider().request({
-      method:
-        "eth_chainId",
-    });
+  const chainId = await getWalletProvider().request({
+    method: "eth_chainId",
+  });
 
-  return String(
-    result,
-  ).toLowerCase();
+  return String(chainId).toLowerCase();
 }
 
 /**
- * ============================================================
- * Switch / verify Bradbury
- * ============================================================
+ * Ensure the injected wallet is on GenLayer Bradbury.
  */
-
 export async function ensureBradburyNetwork(
   provider = getWalletProvider(),
 ): Promise<void> {
-  const currentChainId =
-    String(
-      await provider.request({
-        method:
-          "eth_chainId",
-      }),
-    ).toLowerCase();
+  const currentChainId = String(
+    await provider.request({
+      method: "eth_chainId",
+    }),
+  ).toLowerCase();
 
   if (
     currentChainId ===
@@ -159,28 +204,16 @@ export async function ensureBradburyNetwork(
 
   try {
     await provider.request({
-      method:
-        "wallet_switchEthereumChain",
-
-      params: [
-        {
-          chainId:
-            BRADBURY_CHAIN_ID,
-        },
-      ],
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: BRADBURY_CHAIN_ID }],
     });
   } catch (error: unknown) {
     const code =
-      typeof error ===
-        "object" &&
+      typeof error === "object" &&
       error !== null &&
       "code" in error
         ? Number(
-            (
-              error as {
-                code?: unknown;
-              }
-            ).code,
+            (error as { code?: unknown }).code,
           )
         : undefined;
 
@@ -191,62 +224,36 @@ export async function ensureBradburyNetwork(
     }
 
     await provider.request({
-      method:
-        "wallet_addEthereumChain",
-
+      method: "wallet_addEthereumChain",
       params: [
         {
-          chainId:
-            BRADBURY_CHAIN_ID,
-
-          chainName:
-            "GenLayer Testnet Bradbury",
-
+          chainId: BRADBURY_CHAIN_ID,
+          chainName: "GenLayer Testnet Bradbury",
           nativeCurrency: {
-            name:
-              "GEN Token",
-
-            symbol:
-              "GEN",
-
-            decimals:
-              18,
+            name: "GEN Token",
+            symbol: "GEN",
+            decimals: 18,
           },
-
-          rpcUrls: [
-            BRADBURY_RPC,
-          ],
-
-          blockExplorerUrls: [
-            BRADBURY_EXPLORER,
-          ],
+          rpcUrls: [BRADBURY_RPC],
+          blockExplorerUrls: [BRADBURY_EXPLORER],
         },
       ],
     });
 
     await provider.request({
-      method:
-        "wallet_switchEthereumChain",
-
-      params: [
-        {
-          chainId:
-            BRADBURY_CHAIN_ID,
-        },
-      ],
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: BRADBURY_CHAIN_ID }],
     });
   }
 
-  const finalChainId =
-    String(
-      await provider.request({
-        method:
-          "eth_chainId",
-      }),
-    ).toLowerCase();
+  const verifiedChainId = String(
+    await provider.request({
+      method: "eth_chainId",
+    }),
+  ).toLowerCase();
 
   if (
-    finalChainId !==
+    verifiedChainId !==
     BRADBURY_CHAIN_ID.toLowerCase()
   ) {
     throw new Error(
@@ -256,125 +263,80 @@ export async function ensureBradburyNetwork(
 }
 
 /**
- * ============================================================
- * Read-only GenLayer client
+ * Read-only GenLayer client.
  *
- * IMPORTANT:
- * This client has NO browser wallet provider.
- *
- * Therefore GenLayer RPC operations such as fee estimation
- * use the Bradbury RPC configured in testnetBradbury instead
- * of Rabby's injected RPC endpoint.
- * ============================================================
+ * No browser provider is supplied, so RPC reads go to the
+ * chain configured by testnetBradbury.
  */
-
 export function readClient() {
   return createClient({
-    chain:
-      testnetBradbury,
+    chain: testnetBradbury,
   });
 }
 
 /**
- * ============================================================
- * Wallet-backed GenLayer client
- *
- * This client is only used for signed writes.
- * ============================================================
+ * Wallet-backed client for signed writes.
  */
-
 export function walletClient(
   address: `0x${string}`,
 ) {
   return createClient({
-    chain:
-      testnetBradbury,
-
-    account:
-      address,
-
-    provider:
-      getWalletProvider(),
+    chain: testnetBradbury,
+    account: address,
+    provider: getWalletProvider(),
   });
 }
 
 /**
- * ============================================================
- * Connect wallet
- * ============================================================
+ * Connect the current browser wallet to Bradbury.
  */
-
 export async function connectWallet() {
-  const provider =
-    getWalletProvider();
+  const provider = getWalletProvider();
 
   const rawAccounts =
     await provider.request({
-      method:
-        "eth_requestAccounts",
+      method: "eth_requestAccounts",
     });
 
-  const accounts =
-    Array.isArray(
-      rawAccounts,
-    )
-      ? rawAccounts
-      : [];
+  const accounts = Array.isArray(rawAccounts)
+    ? rawAccounts
+    : [];
 
   const address =
-    typeof accounts[0] ===
-    "string"
+    typeof accounts[0] === "string"
       ? (accounts[0] as `0x${string}`)
       : undefined;
 
   if (!address) {
-    throw new Error(
-      "No wallet account returned.",
-    );
+    throw new Error("No wallet account returned.");
   }
 
-  await ensureBradburyNetwork(
-    provider,
-  );
-
-  const client =
-    walletClient(address);
+  await ensureBradburyNetwork(provider);
 
   return {
     address,
-
-    client,
-
+    client: walletClient(address),
     provider,
   };
 }
 
 /**
- * ============================================================
- * Restore wallet
- * ============================================================
+ * Restore an already-authorized Bradbury account.
  */
-
 export async function restoreWallet() {
-  const provider =
-    getWalletProvider();
+  const provider = getWalletProvider();
 
   const rawAccounts =
     await provider.request({
-      method:
-        "eth_accounts",
+      method: "eth_accounts",
     });
 
-  const accounts =
-    Array.isArray(
-      rawAccounts,
-    )
-      ? rawAccounts
-      : [];
+  const accounts = Array.isArray(rawAccounts)
+    ? rawAccounts
+    : [];
 
   const address =
-    typeof accounts[0] ===
-    "string"
+    typeof accounts[0] === "string"
       ? (accounts[0] as `0x${string}`)
       : undefined;
 
@@ -382,13 +344,11 @@ export async function restoreWallet() {
     return null;
   }
 
-  const chainId =
-    String(
-      await provider.request({
-        method:
-          "eth_chainId",
-      }),
-    ).toLowerCase();
+  const chainId = String(
+    await provider.request({
+      method: "eth_chainId",
+    }),
+  ).toLowerCase();
 
   if (
     chainId !==
@@ -397,33 +357,22 @@ export async function restoreWallet() {
     return null;
   }
 
-  const client =
-    walletClient(address);
-
   return {
     address,
-
-    client,
-
+    client: walletClient(address),
     provider,
   };
 }
 
 /**
- * ============================================================
- * Change wallet
- * ============================================================
+ * Ask the wallet for a different account and reconnect it.
  */
-
 export async function changeWallet() {
-  const provider =
-    getWalletProvider();
+  const provider = getWalletProvider();
 
   try {
     await provider.request({
-      method:
-        "wallet_requestPermissions",
-
+      method: "wallet_requestPermissions",
       params: [
         {
           eth_accounts: {},
@@ -431,79 +380,52 @@ export async function changeWallet() {
       ],
     });
   } catch {
-    /*
-     * Not all browser wallets expose
-     * wallet_requestPermissions.
-     */
+    /* Not every wallet implements this method. */
   }
 
   const rawAccounts =
     await provider.request({
-      method:
-        "eth_requestAccounts",
+      method: "eth_requestAccounts",
     });
 
-  const accounts =
-    Array.isArray(
-      rawAccounts,
-    )
-      ? rawAccounts
-      : [];
+  const accounts = Array.isArray(rawAccounts)
+    ? rawAccounts
+    : [];
 
   const address =
-    typeof accounts[0] ===
-    "string"
+    typeof accounts[0] === "string"
       ? (accounts[0] as `0x${string}`)
       : undefined;
 
   if (!address) {
-    throw new Error(
-      "No wallet account selected.",
-    );
+    throw new Error("No wallet account selected.");
   }
 
-  await ensureBradburyNetwork(
-    provider,
-  );
-
-  const client =
-    walletClient(address);
+  await ensureBradburyNetwork(provider);
 
   return {
     address,
-
-    client,
-
+    client: walletClient(address),
     provider,
   };
 }
 
 /**
- * ============================================================
- * Get connected account
- * ============================================================
+ * Return the currently authorized wallet account.
  */
-
 export async function getConnectedAccount(): Promise<
   `0x${string}` | null
 > {
   const rawAccounts =
     await getWalletProvider().request({
-      method:
-        "eth_accounts",
+      method: "eth_accounts",
     });
 
-  const accounts =
-    Array.isArray(
-      rawAccounts,
-    )
-      ? rawAccounts
-      : [];
+  const accounts = Array.isArray(rawAccounts)
+    ? rawAccounts
+    : [];
 
-  if (
-    typeof accounts[0] !==
-    "string"
-  ) {
+  if (typeof accounts[0] !== "string") {
     return null;
   }
 
@@ -511,284 +433,394 @@ export async function getConnectedAccount(): Promise<
 }
 
 /**
- * ============================================================
- * Read ProofWork contract
- * ============================================================
+ * Read a ProofWork record.
  */
-
 export async function getWork(
   workId: string,
 ): Promise<ProofWorkResult> {
-  const id =
-    workId.trim();
+  const id = workId.trim();
 
   if (!id) {
-    throw new Error(
-      "Work ID is required.",
-    );
+    throw new Error("Work ID is required.");
   }
 
-  const result =
-    await readClient().readContract({
-      address:
-        CONTRACT_ADDRESS,
-
-      functionName:
-        "get_work",
-
-      args: [
-        id,
-      ],
-    });
+  const result = await readClient().readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: "get_work",
+    args: [id],
+  });
 
   return result as ProofWorkResult;
 }
 
 /**
- * ============================================================
- * Estimate fees
+ * Direct JSON-RPC request to Bradbury.
  *
- * IMPORTANT:
- *
- * We now use the GenLayerJS fee estimator on the read-only
- * Bradbury client.
- *
- * This means fee-policy reads and Fee Manager calls go to:
- *
- * https://rpc-bradbury.genlayer.com
- *
- * They do NOT go through Rabby's injected RPC provider.
- *
- * The returned feeValue is then passed to the wallet-backed
- * client for the actual signed transaction.
- * ============================================================
+ * This is intentionally separate from the injected wallet provider.
  */
+async function bradburyRpc(
+  method: string,
+  params: unknown[],
+): Promise<unknown> {
+  const response = await fetch(BRADBURY_RPC, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params,
+    }),
+  });
 
-async function estimateWriteFees() {
-  const client =
-    readClient();
-
-  try {
-    const estimate =
-      await client.estimateTransactionFees(
-        {
-          leaderTimeunitsAllocation:
-            100n,
-
-          validatorTimeunitsAllocation:
-            200n,
-
-          rotations: [
-            0n,
-          ],
-
-          totalMessageFees:
-            0n,
-        },
-      );
-
-    return {
-      distribution:
-        estimate.distribution,
-
-      messageAllocations:
-        estimate.messageAllocations,
-
-      feeValue:
-        estimate.feeValue,
-    };
-  } catch (error) {
-    console.error(
-      "Bradbury fee estimation failed:",
-      error,
-    );
-
+  if (!response.ok) {
     throw new Error(
-      "Bradbury fee estimation failed. " +
-        "The fee calculation was rejected by the GenLayer RPC. " +
-        formatGenLayerError(error),
+      "Bradbury RPC HTTP " +
+        String(response.status) +
+        ": " +
+        response.statusText,
     );
   }
+
+  const body = (await response.json()) as {
+    result?: unknown;
+    error?: {
+      code?: number;
+      message?: string;
+      data?: unknown;
+    };
+  };
+
+  if (body.error) {
+    throw new Error(
+      "Bradbury RPC error: " +
+        String(
+          body.error.message ??
+            "Unknown RPC error",
+        ) +
+        (body.error.data !== undefined
+          ? "\nData: " +
+            formatErrorValue(
+              body.error.data,
+            )
+          : ""),
+    );
+  }
+
+  return body.result;
 }
 
 /**
- * ============================================================
- * Error formatting
- * ============================================================
+ * Format arbitrary RPC errors without producing [object Object].
  */
-
-function formatGenLayerError(
-  error: unknown,
-): string {
-  if (
-    error instanceof Error
-  ) {
-    const details =
-      error as Error & {
-        code?: unknown;
-        shortMessage?: unknown;
-        details?: unknown;
-        cause?: unknown;
-        data?: unknown;
-      };
-
-    const parts: string[] =
-      [];
-
-    if (
-      details.shortMessage
-    ) {
-      parts.push(
-        String(
-          details.shortMessage,
-        ),
-      );
-    } else {
-      parts.push(
-        details.message,
-      );
-    }
-
-    if (
-      details.code !==
-      undefined
-    ) {
-      parts.push(
-        "Code: " +
-          String(
-            details.code,
-          ),
-      );
-    }
-
-    if (
-      details.details !==
-      undefined
-    ) {
-      parts.push(
-        "Details: " +
-          formatErrorValue(
-            details.details,
-          ),
-      );
-    }
-
-    if (
-      details.data !==
-      undefined
-    ) {
-      parts.push(
-        "Data: " +
-          formatErrorValue(
-            details.data,
-          ),
-      );
-    }
-
-    if (
-      details.cause !==
-      undefined
-    ) {
-      parts.push(
-        "Cause: " +
-          formatErrorValue(
-            details.cause,
-          ),
-      );
-    }
-
-    return parts.join(
-      " | ",
-    );
-  }
-
-  return formatErrorValue(
-    error,
-  );
-}
-
 function formatErrorValue(
   value: unknown,
 ): string {
-  if (
-    value === null
-  ) {
+  if (value === null) {
     return "null";
   }
 
-  if (
-    value === undefined
-  ) {
+  if (value === undefined) {
     return "undefined";
   }
 
   if (
-    typeof value ===
-      "string" ||
-    typeof value ===
-      "number" ||
-    typeof value ===
-      "boolean"
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
   ) {
-    return String(
-      value,
-    );
+    return String(value);
   }
 
   try {
     return JSON.stringify(
       value,
-      (_key, nestedValue) => {
-        if (
-          typeof nestedValue ===
-          "bigint"
-        ) {
-          return nestedValue.toString();
-        }
-
-        return nestedValue;
-      },
+      (_key, nestedValue) =>
+        typeof nestedValue === "bigint"
+          ? nestedValue.toString()
+          : nestedValue,
       2,
     );
   } catch {
-    return Object.prototype.toString.call(
-      value,
-    );
+    return Object.prototype.toString.call(value);
   }
 }
 
 /**
- * ============================================================
- * Write function names
- * ============================================================
+ * Read a uint256 Fee Manager value directly from Bradbury.
+ *
+ * quoteGasPrice() is intentionally not used.
  */
+async function readBradburyUint(
+  functionName:
+    | "GENPerTimeUnit"
+    | "storageUnitPrice",
+): Promise<bigint> {
+  const data = encodeFunctionData({
+    abi: FEE_MANAGER_ABI,
+    functionName,
+    args: [],
+  });
 
+  const raw = (await bradburyRpc(
+    "eth_call",
+    [
+      {
+        to: FEE_MANAGER_ADDRESS,
+        data,
+      },
+      "latest",
+    ],
+  )) as `0x${string}`;
+
+  return decodeFunctionResult({
+    abi: FEE_MANAGER_ABI,
+    functionName,
+    data: raw,
+  }) as bigint;
+}
+
+/**
+ * Return the larger bigint.
+ */
+function maxBigInt(
+  ...values: bigint[]
+): bigint {
+  let result = values[0] ?? 0n;
+
+  for (const value of values) {
+    if (value > result) {
+      result = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Add price headroom using basis points.
+ *
+ * 12,000 BPS = 20% headroom.
+ */
+function withHeadroom(
+  value: bigint,
+  headroomBps = 12_000n,
+): bigint {
+  if (value === 0n) {
+    return 0n;
+  }
+
+  return (
+    value * headroomBps +
+    9_999n
+  ) / 10_000n;
+}
+
+/**
+ * Build a transaction fee distribution without using
+ * quoteGasPrice().
+ *
+ * The fee reads are performed against the direct Bradbury RPC.
+ */
+async function buildBradburyFees() {
+  const gasPriceRaw =
+    await bradburyRpc(
+      "eth_gasPrice",
+      [],
+    );
+
+  const gasPrice = BigInt(
+    String(gasPriceRaw),
+  );
+
+  if (gasPrice <= 0n) {
+    throw new Error(
+      "Bradbury returned a zero gas price; cannot construct a valid fee cap.",
+    );
+  }
+
+  const [
+    genPerTimeUnit,
+    storageUnitPrice,
+  ] = await Promise.all([
+    readBradburyUint(
+      "GENPerTimeUnit",
+    ),
+    readBradburyUint(
+      "storageUnitPrice",
+    ),
+  ]);
+
+  /**
+   * The current GenLayerJS fee logic uses 20% price-cap headroom.
+   */
+  const receiptGasPrice =
+    withHeadroom(
+      gasPrice,
+      12_000n,
+    );
+
+  const maxPriceGenPerTimeUnit =
+    withHeadroom(
+      genPerTimeUnit,
+      12_000n,
+    );
+
+  const storageFeeMaxGasPrice =
+    withHeadroom(
+      storageUnitPrice,
+      12_000n,
+    );
+
+  /**
+   * Local equivalent of the current SDK's receipt floor.
+   *
+   * This deliberately does not call
+   * messageFeeParamsBudgetFloor(), because that view can
+   * itself depend on quoteGasPrice on-chain.
+   */
+  const minimumReceiptBytes =
+    512n;
+
+  const calldataGasPerByte =
+    16n;
+
+  const receiptSlotsChanged =
+    7n;
+
+  const gasPerChangedSlot =
+    1_000n;
+
+  const fixedProposeReceiptGas =
+    210_000n;
+
+  const intrinsicGas =
+    21_000n;
+
+  const bootloaderOverhead =
+    60_000n;
+
+  const localExecutionBudgetFloor =
+    receiptGasPrice *
+    (
+      fixedProposeReceiptGas +
+      intrinsicGas +
+      bootloaderOverhead +
+      minimumReceiptBytes *
+        calldataGasPerByte +
+      receiptSlotsChanged *
+        gasPerChangedSlot
+    );
+
+  /**
+   * Current SDK baseline is the maximum of:
+   * - 500,000
+   * - execution-budget floor
+   * - receipt gas price * 100,000,000
+   */
+  const executionBudgetPerRound =
+    maxBigInt(
+      500_000n,
+      localExecutionBudgetFloor,
+      receiptGasPrice *
+        100_000_000n,
+    );
+
+  const distribution = {
+    leaderTimeunitsAllocation: 100n,
+    validatorTimeunitsAllocation: 200n,
+    appealRounds: 0n,
+    executionBudgetPerRound,
+    executionConsumed: 0n,
+    totalMessageFees: 0n,
+    rotations: [0n],
+    maxPriceGenPerTimeUnit,
+    storageFeeMaxGasPrice,
+    receiptFeeMaxGasPrice:
+      receiptGasPrice,
+  };
+
+  /**
+   * Ask the Bradbury Fee Manager for the actual deposit.
+   *
+   * This is calculateRoundFees(), not quoteGasPrice().
+   */
+  const encodedData =
+    encodeFunctionData({
+      abi: FEE_MANAGER_ABI,
+      functionName:
+        "calculateRoundFees",
+      args: [
+        distribution,
+        BigInt(
+          testnetBradbury
+            .defaultNumberOfInitialValidators,
+        ),
+        0n,
+      ],
+    });
+
+  let raw: `0x${string}`;
+
+  try {
+    raw = (await bradburyRpc(
+      "eth_call",
+      [
+        {
+          to: FEE_MANAGER_ADDRESS,
+          data: encodedData,
+        },
+        "latest",
+      ],
+    )) as `0x${string}`;
+  } catch (error) {
+    throw new Error(
+      "Bradbury Fee Manager calculateRoundFees reverted. " +
+        "This is now a direct Bradbury RPC failure, not a wallet RPC failure. " +
+        formatErrorValue(error),
+    );
+  }
+
+  const feeValue =
+    decodeFunctionResult({
+      abi: FEE_MANAGER_ABI,
+      functionName:
+        "calculateRoundFees",
+      data: raw,
+    }) as bigint;
+
+  if (feeValue <= 0n) {
+    throw new Error(
+      "Bradbury Fee Manager returned a zero transaction fee.",
+    );
+  }
+
+  return {
+    distribution,
+    messageAllocations: [],
+    feeValue,
+  };
+}
+
+/**
+ * ProofWork write methods.
+ */
 export type ProofWorkWriteFunction =
   | "create_work"
   | "submit_evidence"
   | "verify_work";
 
 /**
- * ============================================================
- * Send ProofWork write
+ * Send a ProofWork state-changing transaction.
  *
- * Flow:
- *
- * 1. Verify wallet is on Bradbury.
- * 2. Estimate fees using the READ-ONLY Bradbury client.
- * 3. Use the Rabby-backed client only for the signed write.
- * 4. Wait for finalization.
- * ============================================================
+ * Fee calculation uses direct Bradbury RPC.
+ * Rabby is used only for the signed transaction itself.
  */
-
 export async function sendWrite(
-  client: ReturnType<
-    typeof walletClient
-  >,
-
-  functionName:
-    ProofWorkWriteFunction,
-
+  client: ReturnType<typeof walletClient>,
+  functionName: ProofWorkWriteFunction,
   args: string[],
 ) {
   if (!client) {
@@ -805,58 +837,39 @@ export async function sendWrite(
   );
 
   /**
-   * Fee estimation happens entirely through
-   * the configured Bradbury GenLayer client.
+   * IMPORTANT:
    *
-   * Rabby is NOT used for the fee-manager read.
+   * Do not replace this with client.estimateTransactionFees().
+   * That method currently reaches quoteGasPrice(), which is the
+   * Bradbury call that was reverting for this project.
    */
   const fees =
-    await estimateWriteFees();
+    await buildBradburyFees();
 
-  /**
-   * Only now do we use the wallet-backed client.
-   */
   const txHash =
     await client.writeContract({
-      address:
-        CONTRACT_ADDRESS,
-
+      address: CONTRACT_ADDRESS,
       functionName,
-
       args,
-
       fees: {
         distribution:
           fees.distribution,
-
         messageAllocations:
           fees.messageAllocations,
-
-        feeValue:
-          fees.feeValue,
+        feeValue: fees.feeValue,
       },
     });
 
-  /**
-   * Wait until GenLayer reports finalization.
-   */
   const receipt =
-    await client.waitForTransactionReceipt(
-      {
-        hash:
-          txHash,
-
-        status:
-          TransactionStatus.FINALIZED,
-
-        fullTransaction:
-          false,
-      },
-    );
+    await client.waitForTransactionReceipt({
+      hash: txHash,
+      status:
+        TransactionStatus.FINALIZED,
+      fullTransaction: false,
+    });
 
   return {
     txHash,
-
     receipt,
   };
 }
